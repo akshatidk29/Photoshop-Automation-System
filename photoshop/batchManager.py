@@ -69,8 +69,131 @@ class PhotoshopBatchManager:
             logError(f"DoJavaScript SaveForWeb failed for path {exportPath}: {e}")
             return False
 
+    def addCombo(self, partId, imagePath, logoPath, targetName, decorationCode,
+                 positionsList, coordinatesList, garmentType, customLogoSize, finalName, canvasHeight=1200):
+        """Add image with multiple logos (combo position) - creates ONE output image."""
+        from .photoshopEngine import prepareComboPairDoc
+        
+        # All coordinates must be present
+        if not coordinatesList or None in coordinatesList:
+            logError(f"Skipping combo because some coordinates missing for {targetName}")
+            return False
+        
+        # Create doc with ALL logos placed
+        tempDoc = prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList,
+                                       garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
+        if tempDoc is None:
+            logError(f"prepareComboPairDoc failed for {targetName}")
+            return False
+
+        # Export the merged image as JPG (one image with all logos)
+        try:
+            canvasWidth = 1200
+            # canvasHeight = 1800 if garmentType == "T-SHIRT" else 1200 <-- REMOVED
+            canvasFolder = f"{canvasWidth} x {canvasHeight}"
+
+            forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)
+            os.makedirs(forPrintingDir, exist_ok=True)
+
+            jpgFilename = finalName.replace('.jpg', '') if finalName.endswith('.jpg') else finalName
+            jpgPath = os.path.join(forPrintingDir, f"{jpgFilename}.jpg")
+
+            exportDoc = tempDoc.Duplicate()
+            self.app.ActiveDocument = exportDoc
+
+            try:
+                exportDoc.Flatten()
+            except Exception:
+                pass
+
+            ok = self._runSaveForWebJs(jpgPath)
+            if not ok:
+                try:
+                    jpgOptions = win32com.client.Dispatch("Photoshop.JPEGSaveOptions")
+                    jpgOptions.Quality = 6
+                    exportDoc.SaveAs(jpgPath, jpgOptions, True)
+                except Exception as e:
+                    logError(f"Fallback SaveAs JPG failed for {jpgPath}: {e}")
+
+            try:
+                exportDoc.Close(2)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logError(f"Failed to export combo JPG for {finalName}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Add layers to batch PSD (image layer + all logo layers)
+        try:
+            # Ensure batch doc exists
+            if self.batchDoc is None:
+                width = float(tempDoc.Width)
+                height = float(tempDoc.Height)
+                res = float(getattr(tempDoc, 'Resolution', 150))
+                name = f"Batch_{self.batchIndex}"
+                self.batchDoc = self.app.Documents.Add(width, height, res, name)
+                self.itemsInBatch = 0
+
+            # Ensure group exists for the product id
+            self.app.ActiveDocument = self.batchDoc
+            layerSets = self.batchDoc.LayerSets
+            targetSet = None
+            for i in range(1, layerSets.Count + 1):
+                try:
+                    s = layerSets[i-1]
+                    if s.Name == str(partId):
+                        targetSet = s
+                        break
+                except Exception:
+                    continue
+            if targetSet is None:
+                targetSet = layerSets.Add()
+                targetSet.Name = str(partId)
+
+            # Duplicate ALL layers from tempDoc into the group
+            # Iterate in REVERSE order (bottom to top) so they stack correctly in target
+            # tempDoc layers: [Top Logo, ..., Bottom Image]
+            # Duplicating Base Image first -> then Logos on top
+            self.app.ActiveDocument = tempDoc
+            layers = tempDoc.ArtLayers
+            for i in range(layers.Count - 1, -1, -1):
+                try:
+                    layer = layers[i]
+                    layer.Duplicate(targetSet)
+                except Exception:
+                    pass
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logError(f"Failed to add combo layers to batch for {partId}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+
+        self.itemsInBatch += 1
+
+        # Save and start new batch if max items reached
+        if self.itemsInBatch >= self.maxItems:
+            try:
+                self._saveAndCloseBatch()
+            except Exception as e:
+                logError(f"Failed to finalize batch {self.batchIndex}: {e}")
+            self.batchIndex += 1
+            self.itemsInBatch = 0
+
+        return True
+
     def addPair(self, partId, imagePath, logoPath, targetName, decorationCode, 
-                locationName, coordinates, garmentType, customLogoSize, finalName):
+                locationName, coordinates, garmentType, customLogoSize, finalName, canvasHeight=1200):
         """Add image-logo pair to batch."""
         # Coordinates must be present
         if coordinates is None:
@@ -92,7 +215,7 @@ class PhotoshopBatchManager:
 
         # Create temp doc with placed logo
         tempDoc = preparePairDoc(imagePath, logoPath, locationName, coordinates, 
-                                  garmentType, customLogoSize, decorationCode, targetName)
+                                  garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
         if tempDoc is None:
             ctx = {
                 'partId': partId,
@@ -143,7 +266,7 @@ class PhotoshopBatchManager:
         # Export the merged image as JPG
         try:
             canvasWidth = 1200
-            canvasHeight = 1800 if garmentType == "T-SHIRT" else 1200
+            # canvasHeight passed in argument is used
             canvasFolder = f"{canvasWidth} x {canvasHeight}"
 
             forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)

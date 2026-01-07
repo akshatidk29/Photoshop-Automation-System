@@ -12,6 +12,7 @@ from detectors.capDetector import getCapCoordinates, CAP_MAPPING
 from detectors.towelDetector import getTowelCoordinates, TOWEL_MAPPING
 from detectors.bagDetector import getBagCoordinates, BAG_MAPPING
 from detectors.baseDetector import getLocationCoordinates
+from detectors.comboParser import isComboPosition, parseComboPosition, getPositionCount
 from photoshop.batchManager import PhotoshopBatchManager
 from core.utils import detectGarmentTypeFromLocation, computeLogoSize, parseCustomSize
 from services.logger import logError
@@ -23,7 +24,9 @@ ALL_MAPPINGS = {**GARMENT_MAPPING, **CAP_MAPPING, **TOWEL_MAPPING, **BAG_MAPPING
 
 def getLocationCoordinatesForType(imagePath, locationName):
     """Get coordinates using the appropriate detector based on garment type."""
-    return getLocationCoordinates(imagePath, locationName, ALL_MAPPINGS)
+    # Normalize position name
+    normalized = str(locationName).strip().upper().replace(" ", "-")
+    return getLocationCoordinates(imagePath, normalized, ALL_MAPPINGS)
 
 
 class AutomationGUI:
@@ -32,8 +35,8 @@ class AutomationGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Photoshop Automation")
-        self.root.geometry("700x560")
-        self.root.resizable(False, False)
+        self.root.geometry("700x750")
+        self.root.resizable(True, True)
         
         # Center window on screen
         self.root.update_idletasks()
@@ -91,6 +94,17 @@ class AutomationGUI:
         self.logoLabel = tk.Label(logoFrame, text="No folder selected", font=("Arial", 9), fg="red", bg="#E3F2FD")
         self.logoLabel.pack(anchor=tk.W, pady=2)
         tk.Button(logoFrame, text="Browse Logos Folder", command=self.selectLogoFolder, bg="#FF9800", fg="white", width=35, height=1).pack(pady=2)
+
+        # Settings (Canvas Size)
+        settingsFrame = tk.LabelFrame(mainFrame, text="4. Canvas Settings", font=("Arial", 10, "bold"), padx=8, pady=5, bg="#E3F2FD")
+        settingsFrame.pack(fill=tk.X, pady=3)
+        
+        self.canvasSizeVar = tk.StringVar(value="1800")
+        
+        tk.Label(settingsFrame, text="Default Canvas Height for Garments (Width 1200):", bg="#E3F2FD", font=("Arial", 9)).pack(anchor=tk.W)
+        
+        tk.Radiobutton(settingsFrame, text="1800px (Standard T-Shirts)", variable=self.canvasSizeVar, value="1800", bg="#E3F2FD", font=("Arial", 9)).pack(anchor=tk.W, padx=10)
+        tk.Radiobutton(settingsFrame, text="1200px (Square)", variable=self.canvasSizeVar, value="1200", bg="#E3F2FD", font=("Arial", 9)).pack(anchor=tk.W, padx=10)
 
         # Progress Section
         progressFrame = tk.LabelFrame(self.root, text="Progress", font=("Arial", 10, "bold"), padx=10, pady=8)
@@ -169,7 +183,12 @@ class AutomationGUI:
 
     def runAutomationThread(self):
         """Run automation in background thread."""
-        success = runAutomation(self.excelPath, self.imageRoot, self.logoRoot, self)
+        try:
+            defaultCanvasHeight = int(self.canvasSizeVar.get())
+        except ValueError:
+            defaultCanvasHeight = 1800
+            
+        success = runAutomation(self.excelPath, self.imageRoot, self.logoRoot, defaultCanvasHeight, self)
         
         self.processing = False
         if success:
@@ -204,7 +223,7 @@ class AutomationGUI:
         self.root.update()
 
 
-def runAutomation(excelPath, imageRoot, logoRoot, gui=None):
+def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=None):
     """Main automation function."""
     print("\n" + "="*70)
     print("                 PHOTOSHOP BATCH AUTOMATION")
@@ -295,6 +314,22 @@ def runAutomation(excelPath, imageRoot, logoRoot, gui=None):
                     except Exception:
                         logoDims = (99.0, 99.0)
 
+                # Parse combo positions - get list of individual positions
+                positions = parseComboPosition(locationName)
+                isCombo = len(positions) > 1
+                
+                if isCombo:
+                    print(f"[{idx:3d}/{len(rows)}] [COMBO] {locationName} -> {len(positions)} positions: {positions}")
+
+                # Determine canvas height based on garment type and user preference
+                if garmentType in ["CAP", "BAG", "BLANKET"]:
+                    activeCanvasHeight = 1200
+                elif garmentType == "T-SHIRT":
+                    activeCanvasHeight = defaultCanvasHeight # User selected in GUI, default 1800
+                else:
+                    # UNKNOWN or others - fallback to default preference
+                    activeCanvasHeight = defaultCanvasHeight
+
                 # Try candidates sequentially
                 success = False
                 firstError = None
@@ -302,27 +337,68 @@ def runAutomation(excelPath, imageRoot, logoRoot, gui=None):
 
                 for imagePath in candidates:
                     try:
-                        coords = getLocationCoordinatesForType(imagePath, locationName)
-                        ok = batchMgr.addPair(
-                            partId,
-                            imagePath,
-                            logoPath,
-                            targetName,
-                            decorationCode,
-                            locationName,
-                            coords,
-                            garmentType,
-                            logoDims,
-                            finalName,
-                        )
-
-                        if ok:
-                            processed += 1
-                            print(f"[{idx:3d}/{len(rows)}] [OK] {finalName}")
-                            success = True
-                            break
+                        if isCombo:
+                            # COMBO: Get coordinates for ALL positions, then create ONE image with all logos
+                            coordinatesList = []
+                            allCoordsValid = True
+                            
+                            for singlePosition in positions:
+                                try:
+                                    coords = getLocationCoordinatesForType(imagePath, singlePosition)
+                                    coordinatesList.append(coords)
+                                except ValueError as ve:
+                                    print(f"    [WARN] Position '{singlePosition}' not mapped, skipping")
+                                    coordinatesList.append(None)
+                                    allCoordsValid = False
+                            
+                            # Use addCombo to create ONE image with ALL logos
+                            ok = batchMgr.addCombo(
+                                partId,
+                                imagePath,
+                                logoPath,
+                                targetName,
+                                decorationCode,
+                                positions,
+                                coordinatesList,
+                                garmentType,
+                                logoDims,
+                                finalName,
+                                activeCanvasHeight, # Pass explicitly
+                            )
+                            
+                            if ok:
+                                processed += 1
+                                print(f"[{idx:3d}/{len(rows)}] [OK] {finalName} ({len(positions)} logos on 1 image)")
+                                success = True
+                                break
                         else:
-                            continue
+                            # SINGLE: Use regular addPair for single position
+                            singlePosition = positions[0]
+                            try:
+                                coords = getLocationCoordinatesForType(imagePath, singlePosition)
+                            except ValueError as ve:
+                                print(f"    [WARN] Position '{singlePosition}' not mapped")
+                                continue
+                            
+                            ok = batchMgr.addPair(
+                                partId,
+                                imagePath,
+                                logoPath,
+                                targetName,
+                                decorationCode,
+                                singlePosition,
+                                coords,
+                                garmentType,
+                                logoDims,
+                                finalName,
+                                activeCanvasHeight, # Pass explicitly
+                            )
+
+                            if ok:
+                                processed += 1
+                                print(f"[{idx:3d}/{len(rows)}] [OK] {finalName}")
+                                success = True
+                                break
 
                     except Exception as e:
                         if firstError is None:

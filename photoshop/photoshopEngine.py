@@ -183,13 +183,13 @@ def placeLogoInPhotoshop(imagePath, logoPath, locationName, coordinates, psdName
 
 
 def preparePairDoc(imagePath, logoPath, locationName, coordinates, garmentType, 
-                   customLogoSize, decorationCode, targetName):
+                   customLogoSize, decorationCode, targetName, canvasHeight=1200):
     """Create temporary Photoshop document with image and placed logo."""
     try:
         app = win32com.client.Dispatch("Photoshop.Application")
         app.Visible = True
         location = str(locationName).strip().upper().replace(" ", "-")
-        canvasSize = 1800 if garmentType == "T-SHIRT" else 1200
+        # canvasSize = 1800 if garmentType == "T-SHIRT" else 1200  <-- REPLACED with argument usage
 
         # Open main image and ensure canvas size
         doc = app.Open(imagePath)
@@ -205,7 +205,7 @@ def preparePairDoc(imagePath, logoPath, locationName, coordinates, garmentType,
             logError(f"Failed to set initial resolution to 150 for temp doc {targetName}: {e}")
         
         try:
-            doc.ResizeCanvas(1200, canvasSize)
+            doc.ResizeCanvas(1200, canvasHeight)
         except Exception:
             pass
 
@@ -286,4 +286,98 @@ def preparePairDoc(imagePath, logoPath, locationName, coordinates, garmentType,
             ctx = {'info': 'failed to build context'}
 
         logError(f"preparePairDoc error for {targetName}: {e} | context: {ctx}")
+        return None
+
+
+def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, 
+                         garmentType, customLogoSize, decorationCode, targetName, canvasHeight=1200):
+    """Create Photoshop document with image and MULTIPLE logos placed at different positions."""
+    try:
+        app = win32com.client.Dispatch("Photoshop.Application")
+        app.Visible = True
+        # canvasSize = 1800 if garmentType == "T-SHIRT" else 1200 <-- REPLACED
+
+        # Open main image and ensure canvas size
+        doc = app.Open(imagePath)
+        
+        # Set resolution to 150 DPI
+        try:
+            doc.ResizeImage(doc.Width, doc.Height, 150)
+        except Exception:
+            pass
+        
+        try:
+            doc.ResizeCanvas(1200, canvasHeight)
+        except Exception:
+            pass
+
+        # Rename base image layer
+        try:
+            imageLayer = doc.ArtLayers[0]
+            imageLayer.Name = targetName
+        except Exception:
+            pass
+
+        # Set ruler units to pixels
+        originalRulerUnits = app.Preferences.RulerUnits
+        app.Preferences.RulerUnits = 1
+
+        # Get desired logo size
+        desiredWidth, desiredHeight = customLogoSize
+
+        # Open logo ONCE and copy it
+        logoDoc = app.Open(logoPath)
+        logoDoc.Selection.SelectAll()
+        logoDoc.Selection.Copy()
+        logoDoc.Close(2)
+
+        # Place logo at EACH position
+        for idx, (position, coordinates) in enumerate(zip(positionsList, coordinatesList)):
+            if coordinates is None:
+                print(f"    [WARN] Skipping position {position} - no coordinates")
+                continue
+
+            # Paste logo into main document
+            doc.Paste()
+            pastedLayer = doc.ArtLayers[0]
+            try:
+                pastedLayer.Name = f"{decorationCode}_{position}"
+            except Exception:
+                pass
+
+            # Measure current pasted bounds
+            bounds = pastedLayer.Bounds
+            logoWidth = bounds[2] - bounds[0]
+            logoHeight = bounds[3] - bounds[1]
+
+            # Avoid divide-by-zero
+            if logoWidth == 0 or logoHeight == 0:
+                continue
+
+            scaleW = (desiredWidth / logoWidth) * 100
+            scaleH = (desiredHeight / logoHeight) * 100
+            scale = min(scaleW, scaleH)
+            pastedLayer.Resize(scale, scale, 5)
+
+            # Recompute bounds and translate to target coordinates
+            bounds = pastedLayer.Bounds
+            newWidth = bounds[2] - bounds[0]
+            newHeight = bounds[3] - bounds[1]
+            x, y = coordinates
+            offsetX = x - (bounds[0] + newWidth / 2)
+            offsetY = y - (bounds[1] + newHeight / 2)
+            try:
+                pastedLayer.Translate(offsetX, offsetY)
+            except Exception:
+                pastedLayer.Translate(int(offsetX), int(offsetY))
+
+            print(f"    [LOGO] Placed at {position}: ({x}, {y})")
+
+        # Restore ruler units
+        app.Preferences.RulerUnits = originalRulerUnits
+
+        return doc
+
+    except Exception as e:
+        logError(f"prepareComboPairDoc error for {targetName}: {e}")
         return None
