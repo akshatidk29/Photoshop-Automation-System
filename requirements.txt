@@ -4,6 +4,6 @@ opencv-python
 mediapipe==0.10.9
 PyMuPDF
 pywin32
-pdf2image  # For PDF to image, requires poppler
+pdf2image
 pillow
 PyPDF2
