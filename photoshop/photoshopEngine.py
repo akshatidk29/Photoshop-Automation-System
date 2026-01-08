@@ -1,7 +1,7 @@
 from pdf2image import convert_from_path
 import win32com.client
 import os
-from detectors.baseDetector import getRotationAngle, getArmRotationAngle
+
 from services.logger import logError
 import cv2
 import numpy as np

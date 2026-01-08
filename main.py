@@ -5,29 +5,39 @@ import threading
 import time
 
 from services.excelReader import readExcel
-from locators.imageLocator import findImage, findImageCandidates
+from locators.imageLocator import findImageCandidates
 from locators.logoLocator import findLogo
-from detectors.garmentDetector import getGarmentCoordinates, GARMENT_MAPPING
-from detectors.capDetector import getCapCoordinates, CAP_MAPPING
-from detectors.towelDetector import getTowelCoordinates, TOWEL_MAPPING
-from detectors.bagDetector import getBagCoordinates, BAG_MAPPING
-from detectors.baseDetector import getLocationCoordinates
-from detectors.comboParser import isComboPosition, parseComboPosition, getPositionCount
+
+# Detectors
+from detectors.garmentDetector import getGarmentCoordinates, getGarmentRotationAngle, getGarmentLogoScale, getGarmentArmRotation
+from detectors.capDetector import getCapCoordinates
+from detectors.bagDetector import getBagCoordinates
+from detectors.towelDetector import getTowelCoordinates
+from detectors.comboParser import parseComboPosition
+
+# Core/Utils
 from photoshop.batchManager import PhotoshopBatchManager
-from core.utils import detectGarmentTypeFromLocation, computeLogoSize, parseCustomSize
-from services.logger import logError
+from core.utils import detectGarmentTypeFromLocation, parseCustomSize, normalizeLocation
+from services.logger import logError, RowLogger
 
-
-# Combined mapping for all garment types
-ALL_MAPPINGS = {**GARMENT_MAPPING, **CAP_MAPPING, **TOWEL_MAPPING, **BAG_MAPPING}
-
-
-def getLocationCoordinatesForType(imagePath, locationName):
-    """Get coordinates using the appropriate detector based on garment type."""
-    # Normalize position name
-    normalized = str(locationName).strip().upper().replace(" ", "-")
-    return getLocationCoordinates(imagePath, normalized, ALL_MAPPINGS)
-
+def getCoordinatesForType(imagePath, locationName, originalLocation, garmentType):
+    """
+    Dispatch to specific detector based on type.
+    originalLocation is passed to help with Dual Image context.
+    """
+    if garmentType == "T-SHIRT":
+        return getGarmentCoordinates(imagePath, locationName, originalLocation)
+    elif garmentType == "CAP":
+        return getCapCoordinates(imagePath, locationName)
+    elif garmentType == "BAG":
+        return getBagCoordinates(imagePath, locationName)
+    elif garmentType == "BLANKET":
+        return getTowelCoordinates(imagePath, locationName)
+    
+    # Fallback to Garment if unknown? Or Error?
+    # Default to center if unknown logic
+    print("Unknown Type, using Garment Logic")
+    return getGarmentCoordinates(imagePath, locationName, originalLocation)
 
 class AutomationGUI:
     """Main GUI for Photoshop automation."""
@@ -229,214 +239,153 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
     print("                 PHOTOSHOP BATCH AUTOMATION")
     print("="*70)
 
-    # Validation
+    # Validate inputs
     if not os.path.exists(excelPath):
-        print(f"[ERROR] Excel file not found: {excelPath}")
-        if gui:
-            messagebox.showerror("Error", f"Excel file not found:\n{excelPath}")
         return False
-
-    if not os.path.isdir(imageRoot):
-        print(f"[ERROR] Image folder not found: {imageRoot}")
-        if gui:
-            messagebox.showerror("Error", f"Image folder not found:\n{imageRoot}")
-        return False
-
-    if not os.path.isdir(logoRoot):
-        print(f"[ERROR] Logo folder not found: {logoRoot}")
-        if gui:
-            messagebox.showerror("Error", f"Logo folder not found:\n{logoRoot}")
-        return False
-
-    # Load Excel
+        
+    # Read Excel (Auto-Converts to CSV)
     rows = readExcel(excelPath)
     if not rows:
-        print("[ERROR] No valid rows found in Excel.")
-        if gui:
-            messagebox.showerror("Error", "No valid rows found in Excel file.")
         return False
-
-    # Print configuration
-    print(f"\n[CONFIG] Excel: {os.path.basename(excelPath)}")
-    print(f"[CONFIG] Images: {imageRoot}")
-    print(f"[CONFIG] Logos: {logoRoot}")
-    print(f"[CONFIG] Total rows to process: {len(rows)}")
-    print("-"*70)
-
+        
+    print(f"\n[CONFIG] Total rows to process: {len(rows)}")
+    
     processed = 0
     failed = 0
     
-    try:
-        batchMgr = PhotoshopBatchManager(maxItemsPerBatch=200)
-    except Exception as e:
-        print("BATCH ERROR:", str(e))
-
-    # Process each row
-    try:
-        for idx, row in enumerate(rows, 1):
-            if gui:
-                gui.updateProgress(idx - 1, len(rows))
-            
-            productId = row.get("Product ID")
-            supplierName = row.get("Supplier Name")
-            partId = row.get("Supplier Part ID")
-            color = row.get("Supplier Color")
-            decorationCode = row.get("Decoration Code")
-            locationName = row.get("Decoration Location")
-            customLogoSize = row.get("Custom Logo Size")
-            finalName = str(row.get("Final Image Name")).split(".jpg")[0]
-
-            try:
-                # Find image candidates and logo
-                candidates = findImageCandidates(imageRoot, supplierName, partId, color, locationName)
-                if not candidates:
-                    print(f"[{idx:3d}/{len(rows)}] [SKIP] Image not found for '{finalName}'")
-                    failed += 1
-                    continue
-
-                logoPath = findLogo(logoRoot, decorationCode)
-                if not logoPath:
-                    print(f"[{idx:3d}/{len(rows)}] [SKIP] Logo not found for '{decorationCode}'")
-                    failed += 1
-                    continue
-
-                # Determine garment type
-                garmentType = detectGarmentTypeFromLocation(locationName)
-
-                # Resolve logo size
-                parsed = parseCustomSize(customLogoSize)
-                if parsed:
-                    logoDims = (float(parsed[0]), float(parsed[1]))
-                else:
-                    print("Using computed logo size")
-                    try:
-                        logoDims = computeLogoSize(garmentType, logoPath, locationName)
-                    except Exception:
-                        logoDims = (99.0, 99.0)
-
-                # Parse combo positions - get list of individual positions
-                positions = parseComboPosition(locationName)
-                isCombo = len(positions) > 1
-                
-                if isCombo:
-                    print(f"[{idx:3d}/{len(rows)}] [COMBO] {locationName} -> {len(positions)} positions: {positions}")
-
-                # Determine canvas height based on garment type and user preference
-                if garmentType in ["CAP", "BAG", "BLANKET"]:
-                    activeCanvasHeight = 1200
-                elif garmentType == "T-SHIRT":
-                    activeCanvasHeight = defaultCanvasHeight # User selected in GUI, default 1800
-                else:
-                    # UNKNOWN or others - fallback to default preference
-                    activeCanvasHeight = defaultCanvasHeight
-
-                # Try candidates sequentially
-                success = False
-                firstError = None
-                targetName = f"{partId} {color}.jpg"
-
-                for imagePath in candidates:
-                    try:
-                        if isCombo:
-                            # COMBO: Get coordinates for ALL positions, then create ONE image with all logos
-                            coordinatesList = []
-                            allCoordsValid = True
-                            
-                            for singlePosition in positions:
-                                try:
-                                    coords = getLocationCoordinatesForType(imagePath, singlePosition)
-                                    coordinatesList.append(coords)
-                                except ValueError as ve:
-                                    print(f"    [WARN] Position '{singlePosition}' not mapped, skipping")
-                                    coordinatesList.append(None)
-                                    allCoordsValid = False
-                            
-                            # Use addCombo to create ONE image with ALL logos
-                            ok = batchMgr.addCombo(
-                                partId,
-                                imagePath,
-                                logoPath,
-                                targetName,
-                                decorationCode,
-                                positions,
-                                coordinatesList,
-                                garmentType,
-                                logoDims,
-                                finalName,
-                                activeCanvasHeight, # Pass explicitly
-                            )
-                            
-                            if ok:
-                                processed += 1
-                                print(f"[{idx:3d}/{len(rows)}] [OK] {finalName} ({len(positions)} logos on 1 image)")
-                                success = True
-                                break
-                        else:
-                            # SINGLE: Use regular addPair for single position
-                            singlePosition = positions[0]
-                            try:
-                                coords = getLocationCoordinatesForType(imagePath, singlePosition)
-                            except ValueError as ve:
-                                print(f"    [WARN] Position '{singlePosition}' not mapped")
-                                continue
-                            
-                            ok = batchMgr.addPair(
-                                partId,
-                                imagePath,
-                                logoPath,
-                                targetName,
-                                decorationCode,
-                                singlePosition,
-                                coords,
-                                garmentType,
-                                logoDims,
-                                finalName,
-                                activeCanvasHeight, # Pass explicitly
-                            )
-
-                            if ok:
-                                processed += 1
-                                print(f"[{idx:3d}/{len(rows)}] [OK] {finalName}")
-                                success = True
-                                break
-
-                    except Exception as e:
-                        if firstError is None:
-                            firstError = e
-                        continue
-
-                if not success:
-                    failed += 1
-                    errMsg = str(firstError) if firstError else "No candidate produced a valid result"
-                    logError(f"Row failed: {errMsg}")
-                    print(f"[{idx:3d}/{len(rows)}] [FAIL] {finalName}")
-
-            except Exception as e:
-                logError(f"Error in row {idx - 1} : {finalName}: {e}")
-                failed += 1
-                print(f"[{idx:3d}/{len(rows)}] [ERROR] {finalName}")
-                print(f"          Exception: {str(e)[:60]}")
-                continue
-            
-    except Exception as e:
-        print("FOR LOOP ERROR:", str(e))
-
-    # Finalize remaining batches
-    batchMgr.finalize()
-
-    if gui:
-        gui.updateProgress(len(rows), len(rows))
-        gui.timeLabel.config(text="Completed!")
-
-    # Print results
-    print("-"*70)
-    print(f"\n[RESULT] Total Processed: {processed}/{len(rows)}")
-    print(f"[RESULT] Failed/Skipped: {failed}/{len(rows)}")
-    print("\n[OUTPUT] Files saved to:")
-    print(f"         PSD Files: assets/output/photoshop/")
-    print(f"         JPG Files: assets/output/For Printing/")
-    print("\n" + "="*70 + "\n")
+    batchMgr = PhotoshopBatchManager(maxItemsPerBatch=100)
     
+    for idx, row in enumerate(rows, 1):
+        if gui:
+            gui.updateProgress(idx - 1, len(rows))
+            
+        # Get data
+        productId = row.get("Product ID")
+        supplierName = row.get("Supplier Name")
+        partId = row.get("Supplier Part ID")
+        color = row.get("Supplier Color")
+        decorationCode = row.get("Decoration Code")
+        locationName = row.get("Decoration Location") or ""
+        customLogoSize = row.get("Custom Logo Size")
+        finalName = str(row.get("Final Image Name")).split(".jpg")[0]
+        
+        # Init Row Logger
+        rLog = RowLogger(idx, finalName)
+        rLog.log(f"Processing row {idx}: {finalName}")
+        rLog.log(f"Config: {partId}, {color}, {locationName}, {decorationCode}")
+        
+        try:
+            # 1. Find Images
+            candidates = findImageCandidates(imageRoot, supplierName, partId, color, locationName)
+            if not candidates:
+                rLog.error("No image candidates found.")
+                failed += 1
+                continue
+                
+            rLog.log(f"Found {len(candidates)} image candidates: {[os.path.basename(c) for c in candidates]}")
+
+            # 2. Find Logo
+            logoPath = findLogo(logoRoot, decorationCode)
+            if not logoPath:
+                rLog.error(f"Logo not found: {decorationCode}")
+                failed += 1
+                continue
+            rLog.log(f"Found logo: {os.path.basename(logoPath)}")
+
+            # 3. Detect Garment Type
+            garmentType = detectGarmentTypeFromLocation(locationName)
+            rLog.log(f"Detected Type: {garmentType}")
+            
+            # 4. Canvas settings
+            if garmentType == "T-SHIRT":
+                activeHeight = defaultCanvasHeight
+            else:
+                activeHeight = 1200 # Caps, Bags, Towels are square
+                
+            # 5. Parse Positions
+            positions = parseComboPosition(locationName)
+            positions.sort() 
+            isCombo = len(positions) > 1
+            
+            if isCombo:
+                rLog.log(f"Combo Position Detected: {positions}")
+            else:
+                rLog.log(f"Single Position: {positions[0]}")
+
+            # 6. Process Candidates
+            success = False
+
+            # Note: parseCustomSize returns ONE size.
+            userSize = parseCustomSize(customLogoSize)
+            
+            for imgPath in candidates:
+                rLog.log(f"Trying image: {os.path.basename(imgPath)}")
+                
+                try:
+                    coordinatesList = []
+                    valid = True
+                    
+                    # Compute coordinates for ALL positions on this image
+                    for pos in positions:
+                        try:
+                            coords = getCoordinatesForType(imgPath, pos, locationName, garmentType)
+                            coordinatesList.append(coords)
+                            rLog.log(f"  Coords for {pos}: {coords}")
+                        except Exception as e:
+                            rLog.error(f"  Failed specific pos {pos}: {e}")
+                            valid = False
+                            break
+                    
+                    if not valid:
+                        continue
+                    
+                    finalLogoDims = (99.0, 99.0)
+                    if userSize:
+                        finalLogoDims = userSize
+                    else:
+                        # Compute based on first position
+                        try:
+                            finalLogoDims = getGarmentLogoScale(imgPath, positions[0], (200, 100)) # dummy base
+                            pass
+                        except:
+                            pass
+                    
+                    # Add to Batch
+                    if isCombo:
+                        ok = batchMgr.addCombo(
+                            partId, imgPath, logoPath, f"{partId} {color}.jpg",
+                            decorationCode, positions, coordinatesList,
+                            garmentType, finalLogoDims, finalName, activeHeight
+                        )
+                    else:
+                        ok = batchMgr.addPair(
+                            partId, imgPath, logoPath, f"{partId} {color}.jpg",
+                            decorationCode, positions[0], coordinatesList[0],
+                            garmentType, finalLogoDims, finalName, activeHeight
+                        )
+                        
+                    if ok:
+                        processed += 1
+                        rLog.success(f"Added to batch (Combo={isCombo})")
+                        success = True
+                        break # Done with this row
+                
+                except Exception as e:
+                    rLog.error(f"Candidate failed: {e}")
+                    continue
+            
+            if not success:
+                rLog.error("All candidates failed.")
+                failed += 1
+        
+        except Exception as e:
+            rLog.error(f"Global Row Error: {e}")
+            failed += 1
+            
+    # Finalize
+    batchMgr.finalize()
+    
+    print(f"\n[RESULT] Processed: {processed}, Failed: {failed}")
     return True
 
 

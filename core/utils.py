@@ -48,48 +48,118 @@ def getPsdSizeFromName(name):
     return (1200, 1800)
 
 
+
+# Strict Location List (39 Positions)
+VALID_LOCATIONS = {
+    # 1200 x 1800 (Garments)
+    "FULL-BACK", "FULL-FRONT",
+    "LEFT-BICEP", "RIGHT-BICEP",
+    "LEFT-CHEST", "RIGHT-CHEST",
+    "LEFT-COLLAR", "RIGHT-COLLAR",
+    "LEFT-CUFF", "RIGHT-CUFF",
+    "LEFT-HIP", "RIGHT-HIP",
+    "LEFT-SLEEVE", "RIGHT-SLEEVE",
+    "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
+    "ON-POCKET", "BACK-YOKE",
+    
+    # Dual Image Garments
+    "FULL-BACK-FULL-FRONT", # Standardized from &
+    "LEFT-BICEP-RIGHT-BICEP",
+    "LEFT-CHEST-LEFT-BICEP-RIGHT-BICEP",
+    "LEFT-CHEST-RIGHT-BICEP",
+    "LEFT-CHEST-RIGHT-SLEEVE",
+    "LEFT-SLEEVE-RIGHT-SLEEVE",
+    "RIGHT-CHEST-LEFT-BICEP",
+    "RIGHT-CHEST-LEFT-SLEEVE",
+    "RIGHT-CHEST-LEFT-BICEP-RIGHT-BICEP", # Fixed LFT typo from user request if needed, but matched strict list 
+    "FULL-FRONT-FULL-BACK",
+    "LEFT-CHEST-FULL-BACK",
+    "RIGHT-CHEST-FULL-BACK",
+
+    # 1200 x 1200 (Caps, Bags, Towels)
+    "FRONT-CROWN", "CAP-BACK", "CAP-SIDE", "CAP-FRONT-SIDE",
+    "LOWER-LEFT-CROWN", "LOWER-RIGHT-CROWN",
+    "CORNER-ANGLED-TOWEL", "FRONT_CENTER",
+    "FRONT (ON BAG)", "ON POCKET (ON BAG)"
+}
+
+def normalizeLocation(locationName):
+    """
+    Standardize location strings:
+    1. Upper case, strip, replace spaces/& with hyphens.
+    2. Sort tokens for combo positions (e.g. RIGHT-SLEEVE-LEFT-SLEEVE -> LEFT-SLEEVE-RIGHT-SLEEVE).
+    """
+    if not locationName:
+        return ""
+        
+    # Initial cleanup: "FULL-BACK & FULL-FRONT" -> "FULL-BACK-FULL-FRONT"
+    clean = str(locationName).upper().replace("&", "-").replace(" ", "-")
+    # Remove multiple hyphens
+    clean = "-".join(filter(None, clean.split("-")))
+
+    
+    # Mapping for known variations
+    mapping = {
+        "RIGHT-CHEST-LFT-BICEP-RIGHT-BICEP": "RIGHT-CHEST-LEFT-BICEP-RIGHT-BICEP", # Fix typo LFT
+        "FULL-BACK-&-FULL-FRONT": "FULL-FRONT-FULL-BACK", # Normalize order? 
+    }
+    
+    # Basic normalization for lookup
+    normalized = clean
+    for k, v in mapping.items():
+        if k in normalized:
+            normalized = v
+            
+    # Check if this valid as-is
+    if normalized in VALID_LOCATIONS:
+        return normalized
+    
+    return normalized 
+
+
 def detectGarmentTypeFromLocation(locationName):
-    """Returns garment type from location name."""
-    location = str(locationName).strip().upper().replace(" ", "-")
+    """
+    Returns category: T-SHIRT (includes Dual), CAP, BAG, BLANKET
+    """
+    # Normalize first
+    loc = normalizeLocation(locationName)
+    
+    # Bag
+    if "BAG" in loc:
+        return "BAG"
+        
+    # Cap
+    if "CAP" in loc or "CROWN" in loc:
+        return "CAP"
+        
+    # Towel/Blanket
+    if "TOWEL" in loc or "FRONT_CENTER" == loc: # FRONT_CENTER is Towel in user list
+        return "BLANKET"
+        
+    # Default to T-SHIRT (Garments)
+    return "T-SHIRT"
 
-    canvas1800 = [
-        "FULL-BACK", "FULL-FRONT", "LEFT-BICEP", "RIGHT-BICEP",
-        "LEFT-CHEST", "RIGHT-CHEST", "LEFT-COLLAR", "RIGHT-COLLAR",
-        "LEFT-CUFF", "RIGHT-CUFF", "LEFT-HIP", "RIGHT-HIP",
-        "LEFT-SLEEVE", "RIGHT-SLEEVE", "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
-        "ON-POCKET", "BACK-YOKE",
-        "FULL-BACK & FULL-FRONT",
-        "LEFT-BICEP-RIGHT-BICEP",
-        "LEFT-CHEST-LEFT-BICEP-RIGHT-BICEP",
-        "LEFT-CHEST-RIGHT-BICEP",
-        "LEFT-CHEST-RIGHT-SLEEVE",
-        "LEFT-SLEEVE-RIGHT-SLEEVE",
-        "RIGHT-CHEST-LEFT-BICEP",
-        "RIGHT-CHEST-LEFT-SLEEVE",
-        "RIGHT-CHEST-LFT-BICEP-RIGHT-BICEP",
-        "FULL-FRONT-FULL-BACK",
-        "LEFT-CHEST-FULL-BACK",
-        "RIGHT-CHEST-FULL-BACK"
-    ]
+def isDualImage(locationName):
+    """Returns True if the location implies a dual-image layout (Front + Back)."""
+    loc = normalizeLocation(locationName)
+    # Keyword based or list based
+    if "BACK" in loc and "FRONT" in loc:
+        return True
+    if "BACK" in loc and "CHEST" in loc:
+        return True
+    if "BACK" in loc and "SLEEVE" in loc: # e.g. LEFT-CHEST-FULL-BACK
+        return True
+    if "-BACK" in loc and "FULL" not in loc: 
 
-    canvas1200 = [
-        "FRONT-CROWN", "CAP-BACK", "CAP-SIDE", "CAP-FRONT-SIDE",
-        "LOWER-LEFT-CROWN", "LOWER-RIGHT-CROWN",
-        "CORNER-ANGLED-TOWEL", "FRONT_CENTER",
-        "FRONT (ON BAG)", "ON POCKET (ON BAG)"
-    ]
+        pass
+        
+    # Explicit list from user request item 4:
+    # "all the garment locations containing BACK keyword has this duala image thing"
+    if "BACK" in loc:
+        return True
+        
+    return False
 
-    if location in canvas1800:
-        return "T-SHIRT"
-    elif location in canvas1200:
-        if "CAP" in location or "CROWN" in location:
-            return "CAP"
-        if "BAG" in location:
-            return "BAG"
-        if "TOWEL" in location:
-            return "BLANKET"
-        return "UNKNOWN"
-    return "UNKNOWN"
 
 
 def getPopperPath():

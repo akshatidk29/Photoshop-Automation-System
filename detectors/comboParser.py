@@ -1,19 +1,18 @@
-# Combo position parser - handles positions with multiple logo placements
+from core.utils import VALID_LOCATIONS
 
-# All known single positions (used to parse combo positions)
 SINGLE_POSITIONS = {
-    # Garment positions
-    "FULL-BACK", "FULL-FRONT", "LEFT-BICEP", "RIGHT-BICEP",
-    "LEFT-CHEST", "RIGHT-CHEST", "LEFT-COLLAR", "RIGHT-COLLAR",
-    "LEFT-CUFF", "RIGHT-CUFF", "LEFT-HIP", "RIGHT-HIP",
-    "LEFT-SLEEVE", "RIGHT-SLEEVE", "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
+    "FULL-BACK", "FULL-FRONT",
+    "LEFT-BICEP", "RIGHT-BICEP",
+    "LEFT-CHEST", "RIGHT-CHEST",
+    "LEFT-COLLAR", "RIGHT-COLLAR",
+    "LEFT-CUFF", "RIGHT-CUFF",
+    "LEFT-HIP", "RIGHT-HIP",
+    "LEFT-SLEEVE", "RIGHT-SLEEVE",
+    "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
     "ON-POCKET", "BACK-YOKE",
-    # Cap positions
     "FRONT-CROWN", "CAP-BACK", "CAP-SIDE", "CAP-FRONT-SIDE",
     "LOWER-LEFT-CROWN", "LOWER-RIGHT-CROWN",
-    # Towel positions
     "CORNER-ANGLED-TOWEL", "FRONT_CENTER",
-    # Bag positions
     "FRONT (ON BAG)", "ON POCKET (ON BAG)"
 }
 
