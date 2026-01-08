@@ -10,8 +10,8 @@ from pathlib import Path
 # ===================== CONFIG =====================
 CLASS_ID = "null"          # placeholder as requested
 MIN_AREA = 200             # ignore tiny boxes
-IMAGES_FOLDER = "Blank_Images"      # <-- SET YOUR IMAGES FOLDER
-LABELS_FOLDER = "annotations"      # <-- SET YOUR LABELS FOLDER
+IMAGES_FOLDER = "path/to/images"      # <-- SET YOUR IMAGES FOLDER
+LABELS_FOLDER = "path/to/labels"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
 
 class OBBAnnotator:
@@ -43,6 +43,7 @@ class OBBAnnotator:
         self.drawing_start = None
         self.selected_box_idx = None
         self.drag_start = None
+        self.resize_edge = None  # Which edge is being resized
         self.auto_save = tk.BooleanVar(value=True)
         
         self.obb_list = []
@@ -183,7 +184,7 @@ class OBBAnnotator:
         help_frame = tk.Frame(center_frame, bg='#1a1a1a')
         help_frame.pack(fill=tk.X, pady=(5, 0))
         
-        help_text = "💡 Drag: Create box | Click+Drag: Move | Drag corners: Rotate | Double-click: Delete | ⬅➡: Navigate"
+        help_text = "💡 Drag: Create box | Click+Drag: Move | Drag edges: Resize | Drag corners: Rotate | Double-click: Delete | ⬅➡: Navigate"
         tk.Label(help_frame, text=help_text, bg='#1a1a1a', fg='#888888', 
                 font=('Arial', 9, 'italic')).pack(pady=5)
         
@@ -375,23 +376,40 @@ class OBBAnnotator:
         label_file = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
         
         if label_file.exists():
-            try:
-                with open(label_file, 'r') as f:
-                    for line in f:
-                        parts = line.strip().split()
-                        if len(parts) == 9:  # class_id + 8 coordinates
-                            coords = [float(x) for x in parts[1:]]
-                            # Denormalize
-                            corners = [
-                                (coords[0] * self.W, coords[1] * self.H),
-                                (coords[2] * self.W, coords[3] * self.H),
-                                (coords[4] * self.W, coords[5] * self.H),
-                                (coords[6] * self.W, coords[7] * self.H)
-                            ]
-                            self.obb_list.append(corners)
-                self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
-            except Exception as e:
-                self.status_var.set(f"Error loading annotations: {str(e)}")
+            # Prompt user about existing annotations
+            response = messagebox.askyesnocancel(
+                "Existing Annotations Found",
+                f"Annotations already exist for this image.\n\n"
+                f"Yes: Load existing annotations\n"
+                f"No: Start fresh (will overwrite on save)\n"
+                f"Cancel: Go back",
+                icon='warning'
+            )
+            
+            if response is None:  # Cancel
+                # Go back to previous image
+                if self.current_image_idx > 0:
+                    self.current_image_idx -= 1
+                return
+            elif response:  # Yes - load existing
+                try:
+                    with open(label_file, 'r') as f:
+                        for line in f:
+                            parts = line.strip().split()
+                            if len(parts) == 9:  # class_id + 8 coordinates
+                                coords = [float(x) for x in parts[1:]]
+                                # Denormalize
+                                corners = [
+                                    (coords[0] * self.W, coords[1] * self.H),
+                                    (coords[2] * self.W, coords[3] * self.H),
+                                    (coords[4] * self.W, coords[5] * self.H),
+                                    (coords[6] * self.W, coords[7] * self.H)
+                                ]
+                                self.obb_list.append(corners)
+                    self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
+                except Exception as e:
+                    self.status_var.set(f"Error loading annotations: {str(e)}")
+            # else: No - start fresh (obb_list already cleared)
         
     def prev_image(self):
         """Navigate to previous image"""
@@ -469,6 +487,7 @@ class OBBAnnotator:
         
         clicked_box = self.get_box_at_point(event.x, event.y)
         clicked_handle = self.get_rotation_handle_at_point(event.x, event.y)
+        clicked_edge = self.get_resize_edge_at_point(event.x, event.y)
         
         if clicked_handle is not None:
             self.mode = 'rotating'
@@ -476,6 +495,13 @@ class OBBAnnotator:
             self.drag_start = (event.x, event.y)
             self.highlight_box(self.selected_box_idx)
             self.status_var.set(f"🔄 Rotating box #{self.selected_box_idx + 1}")
+        elif clicked_edge is not None:
+            self.mode = 'resizing'
+            self.selected_box_idx = clicked_edge[0]
+            self.resize_edge = clicked_edge[1]
+            self.drag_start = (event.x, event.y)
+            self.highlight_box(self.selected_box_idx)
+            self.status_var.set(f"↔️ Resizing box #{self.selected_box_idx + 1}")
         elif clicked_box is not None:
             self.mode = 'moving'
             self.selected_box_idx = clicked_box
@@ -509,6 +535,34 @@ class OBBAnnotator:
             dx_img, dy_img = dx / self.scale, dy / self.scale
             new_corners = [(x + dx_img, y + dy_img) for x, y in corners]
             self.obb_list[self.selected_box_idx] = new_corners
+            
+            self.redraw_box(self.selected_box_idx)
+            self.update_info_display()
+            
+        elif self.mode == 'resizing' and self.selected_box_idx is not None:
+            # Resize the edge
+            corners = self.obb_list[self.selected_box_idx]
+            
+            # Get mouse movement in image coordinates
+            curr_x, curr_y = self.canvas_to_image(event.x, event.y)
+            old_x, old_y = self.canvas_to_image(self.drag_start[0], self.drag_start[1])
+            dx = curr_x - old_x
+            dy = curr_y - old_y
+            
+            # Move the two corners of the selected edge
+            edge_idx = self.resize_edge
+            new_corners = list(corners)
+            
+            # Calculate which corners to move based on edge index
+            corner1_idx = edge_idx
+            corner2_idx = (edge_idx + 1) % 4
+            
+            # Move both corners of this edge
+            new_corners[corner1_idx] = (corners[corner1_idx][0] + dx, corners[corner1_idx][1] + dy)
+            new_corners[corner2_idx] = (corners[corner2_idx][0] + dx, corners[corner2_idx][1] + dy)
+            
+            self.obb_list[self.selected_box_idx] = new_corners
+            self.drag_start = (event.x, event.y)
             
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
@@ -570,11 +624,12 @@ class OBBAnnotator:
             
             self.canvas.delete('temp')
             
-        elif self.mode in ['moving', 'rotating']:
+        elif self.mode in ['moving', 'rotating', 'resizing']:
             self.status_var.set(f"✓ Box #{self.selected_box_idx + 1} updated")
         
         self.mode = None
         self.drawing_start = None
+        self.resize_edge = None
     
     def on_mouse_move(self, event):
         if self.mode is None and self.original_img is not None:
@@ -584,6 +639,8 @@ class OBBAnnotator:
             
             if self.get_rotation_handle_at_point(event.x, event.y) is not None:
                 self.canvas.config(cursor='exchange')
+            elif self.get_resize_edge_at_point(event.x, event.y) is not None:
+                self.canvas.config(cursor='sb_h_double_arrow')  # Resize cursor
             elif self.get_box_at_point(event.x, event.y) is not None:
                 self.canvas.config(cursor='fleur')
             else:
@@ -616,6 +673,46 @@ class OBBAnnotator:
                 if dist < 8:
                     return idx
         return None
+    
+    def get_resize_edge_at_point(self, cx, cy):
+        """Check if point is near an edge of any box. Returns (box_idx, edge_idx)"""
+        threshold = 8  # Distance threshold for edge detection
+        
+        for idx, corners in enumerate(self.obb_list):
+            canvas_corners = [self.image_to_canvas(x, y) for x, y in corners]
+            
+            # Check each edge
+            for i in range(4):
+                p1 = canvas_corners[i]
+                p2 = canvas_corners[(i + 1) % 4]
+                
+                # Calculate distance from point to line segment
+                dist = self.point_to_segment_distance(cx, cy, p1[0], p1[1], p2[0], p2[1])
+                
+                if dist < threshold:
+                    return (idx, i)
+        
+        return None
+    
+    def point_to_segment_distance(self, px, py, x1, y1, x2, y2):
+        """Calculate distance from point to line segment"""
+        # Vector from point 1 to point 2
+        dx = x2 - x1
+        dy = y2 - y1
+        
+        if dx == 0 and dy == 0:
+            # Point 1 and 2 are the same
+            return math.sqrt((px - x1)**2 + (py - y1)**2)
+        
+        # Parameter t of the closest point on the line segment
+        t = max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / (dx**2 + dy**2)))
+        
+        # Closest point on segment
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+        
+        # Distance
+        return math.sqrt((px - closest_x)**2 + (py - closest_y)**2)
     
     def point_in_polygon(self, x, y, polygon):
         n = len(polygon)
