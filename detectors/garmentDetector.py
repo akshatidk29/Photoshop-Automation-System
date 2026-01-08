@@ -322,6 +322,24 @@ def getGarmentLogoScale(imagePath, locationName, baseLogoSize=(200, 100)):
     
     return (newWidth, newHeight)
 
-def getGarmentArmRotation(imagePath, locationName):
+
+
+
+
+# Main
+
+def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
+    """Standard Interface: Get (x, y) coordinates."""
+    # We pass originalLocationContext if available
+    return getGarmentCoordinates(imagePath, locationName, originalLocation, debug)
+
+def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
+    """Standard Interface: Get (width, height) for logo."""
+    return getGarmentLogoScale(imagePath, locationName, baseSize)
+
+def getRotation(imagePath, locationName):
+    """Standard Interface: Get rotation angle."""
     return getGarmentRotationAngle(imagePath, locationName)
+
+# Legacy aliases if needed internally, but prefer using standard names in future.
 

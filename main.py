@@ -9,10 +9,11 @@ from locators.imageLocator import findImageCandidates
 from locators.logoLocator import findLogo
 
 # Detectors
-from detectors.garmentDetector import getGarmentCoordinates, getGarmentRotationAngle, getGarmentLogoScale, getGarmentArmRotation
-from detectors.capDetector import getCapCoordinates
-from detectors.bagDetector import getBagCoordinates
-from detectors.towelDetector import getTowelCoordinates
+# Detectors (Import Modules directly)
+import detectors.garmentDetector as garmentDetector
+import detectors.capDetector as capDetector
+import detectors.bagDetector as bagDetector
+import detectors.towelDetector as towelDetector
 from detectors.comboParser import parseComboPosition
 
 # Core/Utils
@@ -20,24 +21,18 @@ from photoshop.batchManager import PhotoshopBatchManager
 from core.utils import detectGarmentTypeFromLocation, parseCustomSize, normalizeLocation
 from services.logger import logError, RowLogger
 
-def getCoordinatesForType(imagePath, locationName, originalLocation, garmentType):
-    """
-    Dispatch to specific detector based on type.
-    originalLocation is passed to help with Dual Image context.
-    """
-    if garmentType == "T-SHIRT":
-        return getGarmentCoordinates(imagePath, locationName, originalLocation)
-    elif garmentType == "CAP":
-        return getCapCoordinates(imagePath, locationName)
-    elif garmentType == "BAG":
-        return getBagCoordinates(imagePath, locationName)
-    elif garmentType == "BLANKET":
-        return getTowelCoordinates(imagePath, locationName)
-    
-    # Fallback to Garment if unknown? Or Error?
-    # Default to center if unknown logic
-    print("Unknown Type, using Garment Logic")
-    return getGarmentCoordinates(imagePath, locationName, originalLocation)
+# MODULE MAP
+DETECTOR_MODULES = {
+    "T-SHIRT": garmentDetector,
+    "CAP": capDetector,
+    "BAG": bagDetector,
+    "BLANKET": towelDetector
+}
+
+def getDetector(garmentType):
+    """Retrieve the correct detector module."""
+    # Default to garmentDetector if unknown type
+    return DETECTOR_MODULES.get(garmentType, garmentDetector)
 
 class AutomationGUI:
     """Main GUI for Photoshop automation."""
@@ -318,6 +313,9 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
             # Note: parseCustomSize returns ONE size.
             userSize = parseCustomSize(customLogoSize)
             
+            # Select Detector Module
+            detector = getDetector(garmentType)
+            
             for imgPath in candidates:
                 rLog.log(f"Trying image: {os.path.basename(imgPath)}")
                 
@@ -328,7 +326,9 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
                     # Compute coordinates for ALL positions on this image
                     for pos in positions:
                         try:
-                            coords = getCoordinatesForType(imgPath, pos, locationName, garmentType)
+                            # Standard Call: (image, location, *optionalContext)
+                            # Some detectors ignore originalLocation, which is fine.
+                            coords = detector.getCoordinates(imgPath, pos, originalLocation=locationName)
                             coordinatesList.append(coords)
                             rLog.log(f"  Coords for {pos}: {coords}")
                         except Exception as e:
@@ -338,17 +338,16 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
                     
                     if not valid:
                         continue
-                    
+                        
                     finalLogoDims = (99.0, 99.0)
                     if userSize:
                         finalLogoDims = userSize
                     else:
-                        # Compute based on first position
+                        # Compute based on first position using Standard Interface
                         try:
-                            finalLogoDims = getGarmentLogoScale(imgPath, positions[0], (200, 100)) # dummy base
-                            pass
+                            finalLogoDims = detector.getLogoScale(imgPath, positions[0], (200, 100))
                         except:
-                            pass
+                             finalLogoDims = (200, 100)
                     
                     # Add to Batch
                     if isCombo:

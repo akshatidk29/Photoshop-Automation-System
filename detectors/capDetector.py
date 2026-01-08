@@ -94,3 +94,19 @@ def getCapCoordinates(imagePath, locationName, debug=False):
 
     # Default
     return centerX, centerY
+
+# Main
+
+def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
+    """Standard Interface: Get (x, y) coordinates."""
+    return getCapCoordinates(imagePath, locationName, debug)
+
+def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
+    """Standard Interface: Get (width, height) for logo."""
+    # Dummy implementation for now - return base size
+    return baseSize
+
+def getRotation(imagePath, locationName):
+    """Standard Interface: Get rotation angle."""
+    # Caps usually dont need rotation unless curved text on back arch?
+    return 0
