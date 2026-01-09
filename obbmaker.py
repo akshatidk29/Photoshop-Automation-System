@@ -7,11 +7,56 @@ from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 from pathlib import Path
 
-# ===================== CONFIG =====================
-CLASS_ID = "null"          # placeholder as requested
+CLASS_LABELS = {
+    "0":  "FULL_BACK",
+    "1":  "FULL_FRONT",
+
+    "2":  "LEFT_BICEP",
+    "3":  "RIGHT_BICEP",
+
+    "4":  "LEFT_CHEST",
+    "5":  "RIGHT_CHEST",
+
+    "6":  "LEFT_COLLAR",
+    "7":  "RIGHT_COLLAR",
+
+    "8":  "LEFT_CUFF",
+    "9":  "RIGHT_CUFF",
+
+    "10": "LEFT_HIP",
+    "11": "RIGHT_HIP",
+
+    "12": "LEFT_SLEEVE",
+    "13": "RIGHT_SLEEVE",
+
+    "14": "LEFT_THIGH_HIGH",
+    "15": "RIGHT_THIGH_HIGH",
+
+    "16": "ON_POCKET",
+
+    "17": "BACK_YOKE",
+
+    # Cap-related
+    "18": "CAP_BACK",
+    "19": "CAP_SIDE",
+    "20": "CAP_FRONT_SIDE",
+
+    # Crown-related
+    "21": "LOWER_LEFT_CROWN",
+    "22": "LOWER_RIGHT_CROWN",
+
+    # Other items / products
+    "23": "CORNER_ANGLED_TOWEL",
+    "24": "FRONT_CENTER",
+
+    # Bag-related
+    "25": "FRONT_ON_BAG",
+    "26": "ON_POCKET_ON_BAG"
+}
+
 MIN_AREA = 200             # ignore tiny boxes
 IMAGES_FOLDER = "path/to/images"      # <-- SET YOUR IMAGES FOLDER
-LABELS_FOLDER = "path/to/labels"      # <-- SET YOUR LABELS FOLDER
+LABELS_FOLDER = "annotations"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
 
 class OBBAnnotator:
@@ -46,7 +91,7 @@ class OBBAnnotator:
         self.resize_edge = None  # Which edge is being resized
         self.auto_save = tk.BooleanVar(value=True)
         
-        self.obb_list = []
+        self.obb_list = []  # List of (corners, class_id) tuples
         self.box_graphics = []
         
         self.setup_ui()
@@ -275,9 +320,116 @@ class OBBAnnotator:
             # Create folder if it doesn't exist
             Path(self.labels_folder).mkdir(parents=True, exist_ok=True)
             self.status_var.set(f"Labels will be saved to: {self.labels_folder}")
+    
+    def show_class_selection_dialog(self):
+        """Show dialog to select class for the newly drawn box"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Class")
+        dialog.configure(bg='#2b2b2b')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        selected_class = tk.StringVar(value=list(CLASS_LABELS.keys())[0])
+        
+        # Title
+        tk.Label(dialog, text="Select Class for Box", font=('Arial', 14, 'bold'),
+                bg='#2b2b2b', fg='white', pady=15).pack()
+        
+        # Class selection frame with grid layout
+        classes_frame = tk.Frame(dialog, bg='#1a1a1a', bd=2, relief=tk.SUNKEN)
+        classes_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        # Calculate grid dimensions (aim for 6 items per column)
+        items_per_column = 6
+        total_items = len(CLASS_LABELS)
+        num_columns = (total_items + items_per_column - 1) // items_per_column
+        
+        # Add radio buttons in grid layout
+        class_items = list(CLASS_LABELS.items())
+        for idx, (class_id, class_name) in enumerate(class_items):
+            col = idx // items_per_column
+            row = idx % items_per_column
+            
+            rb = tk.Radiobutton(
+                classes_frame,
+                text=f"{class_id}: {class_name}",
+                variable=selected_class,
+                value=class_id,
+                bg='#1a1a1a',
+                fg='white',
+                selectcolor='#2b2b2b',
+                activebackground='#1a1a1a',
+                activeforeground='white',
+                font=('Arial', 10),
+                pady=4,
+                padx=10,
+                anchor='w',
+                cursor='hand2'
+            )
+            rb.grid(row=row, column=col, sticky='w', padx=5, pady=2)
+        
+        # Buttons frame
+        btn_frame = tk.Frame(dialog, bg='#2b2b2b')
+        btn_frame.pack(fill=tk.X, padx=20, pady=15)
+        
+        result = {'confirmed': False, 'class_id': None}
+        
+        def confirm():
+            result['confirmed'] = True
+            result['class_id'] = selected_class.get()
+            dialog.destroy()
+        
+        def cancel():
+            result['confirmed'] = False
+            dialog.destroy()
+        
+        tk.Button(btn_frame, text="✓ Confirm", command=confirm,
+                 bg='#28a745', fg='white', font=('Arial', 11, 'bold'),
+                 relief=tk.FLAT, padx=30, pady=10, cursor='hand2').pack(side=tk.LEFT, expand=True, padx=5)
+        
+        tk.Button(btn_frame, text="✗ Cancel", command=cancel,
+                 bg='#dc3545', fg='white', font=('Arial', 11, 'bold'),
+                 relief=tk.FLAT, padx=30, pady=10, cursor='hand2').pack(side=tk.RIGHT, expand=True, padx=5)
+        
+        # Keyboard shortcuts
+        dialog.bind('<Return>', lambda e: confirm())
+        dialog.bind('<Escape>', lambda e: cancel())
+        
+        # Update and center the dialog after packing all widgets
+        dialog.update_idletasks()
+        
+        # Get screen dimensions
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        
+        # Get dialog dimensions
+        dialog_width = dialog.winfo_reqwidth() + 100  # Add padding for multiple columns
+        dialog_height = dialog.winfo_reqheight()
+        
+        # Ensure good proportions
+        dialog_width = max(dialog_width, 900)  # Wider for multiple columns
+        
+        # Make sure dialog fits on screen
+        if dialog_height > screen_height - 100:
+            dialog_height = screen_height - 100
+        
+        # Center on parent window
+        x = self.root.winfo_x() + (self.root.winfo_width() - dialog_width) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dialog_height) // 2
+        
+        # Make sure dialog is on screen
+        x = max(0, min(x, screen_width - dialog_width))
+        y = max(0, min(y, screen_height - dialog_height))
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        
+        # Wait for dialog to close
+        self.root.wait_window(dialog)
+        
+        return result
             
     def load_image_list(self):
-        """Load all images from the selected folder"""
+        """Load all images from the selected folder and all subdirectories"""
         if not self.images_folder or not os.path.exists(self.images_folder):
             messagebox.showerror("Error", "Invalid images folder!")
             return
@@ -286,14 +438,15 @@ class OBBAnnotator:
         extensions = ['.jpg', '.jpeg', '.png', '.bmp']
         
         self.image_files = []
+        # Use ** for recursive search through all subdirectories
         for ext in extensions:
-            self.image_files.extend(Path(self.images_folder).glob(f"*{ext}"))
-            self.image_files.extend(Path(self.images_folder).glob(f"*{ext.upper()}"))
+            self.image_files.extend(Path(self.images_folder).rglob(f"*{ext}"))
+            self.image_files.extend(Path(self.images_folder).rglob(f"*{ext.upper()}"))
         
         self.image_files = sorted(self.image_files)
         
         if not self.image_files:
-            messagebox.showwarning("No Images", "No images found in the selected folder!")
+            messagebox.showwarning("No Images", "No images found in the selected folder and its subdirectories!")
             return
         
         # Populate listbox
@@ -301,13 +454,13 @@ class OBBAnnotator:
         for img_file in self.image_files:
             # Check if already annotated
             label_file = Path(self.labels_folder) / f"{img_file.stem}.txt"
-            status = "✓" if label_file.exists() else "○"
+            status = "✅" if label_file.exists() else "○"
             self.image_listbox.insert(tk.END, f"{status} {img_file.name}")
         
         self.current_image_idx = 0
         self.load_image(0)
         self.update_progress()
-        self.status_var.set(f"Loaded {len(self.image_files)} images from folder")
+        self.status_var.set(f"Loaded {len(self.image_files)} images from folder (including subdirectories)")
         
     def filter_image_list(self, *args):
         """Filter image list based on search"""
@@ -397,6 +550,7 @@ class OBBAnnotator:
                         for line in f:
                             parts = line.strip().split()
                             if len(parts) == 9:  # class_id + 8 coordinates
+                                class_id = parts[0]
                                 coords = [float(x) for x in parts[1:]]
                                 # Denormalize
                                 corners = [
@@ -405,7 +559,7 @@ class OBBAnnotator:
                                     (coords[4] * self.W, coords[5] * self.H),
                                     (coords[6] * self.W, coords[7] * self.H)
                                 ]
-                                self.obb_list.append(corners)
+                                self.obb_list.append((corners, class_id))
                     self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
                 except Exception as e:
                     self.status_var.set(f"Error loading annotations: {str(e)}")
@@ -531,17 +685,17 @@ class OBBAnnotator:
             dy = event.y - self.drag_start[1]
             self.drag_start = (event.x, event.y)
             
-            corners = self.obb_list[self.selected_box_idx]
+            corners, class_id = self.obb_list[self.selected_box_idx]
             dx_img, dy_img = dx / self.scale, dy / self.scale
             new_corners = [(x + dx_img, y + dy_img) for x, y in corners]
-            self.obb_list[self.selected_box_idx] = new_corners
+            self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
             
         elif self.mode == 'resizing' and self.selected_box_idx is not None:
             # Resize the edge
-            corners = self.obb_list[self.selected_box_idx]
+            corners, class_id = self.obb_list[self.selected_box_idx]
             
             # Get mouse movement in image coordinates
             curr_x, curr_y = self.canvas_to_image(event.x, event.y)
@@ -561,14 +715,14 @@ class OBBAnnotator:
             new_corners[corner1_idx] = (corners[corner1_idx][0] + dx, corners[corner1_idx][1] + dy)
             new_corners[corner2_idx] = (corners[corner2_idx][0] + dx, corners[corner2_idx][1] + dy)
             
-            self.obb_list[self.selected_box_idx] = new_corners
+            self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             self.drag_start = (event.x, event.y)
             
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
             
         elif self.mode == 'rotating' and self.selected_box_idx is not None:
-            corners = self.obb_list[self.selected_box_idx]
+            corners, class_id = self.obb_list[self.selected_box_idx]
             
             cx = sum(x for x, y in corners) / 4
             cy = sum(y for x, y in corners) / 4
@@ -590,7 +744,7 @@ class OBBAnnotator:
                 ry = tx * sin_a + ty * cos_a
                 new_corners.append((rx + cx, ry + cy))
             
-            self.obb_list[self.selected_box_idx] = new_corners
+            self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             self.drag_start = (event.x, event.y)
             
             self.redraw_box(self.selected_box_idx)
@@ -615,10 +769,17 @@ class OBBAnnotator:
                 width = abs(img_x2 - img_x1)
                 height = abs(img_y2 - img_y1)
                 if width * height >= MIN_AREA:
-                    self.obb_list.append(corners)
-                    self.redraw_all_boxes()
-                    self.update_annotations_list()
-                    self.status_var.set(f"✓ Box #{len(self.obb_list)} created! Total: {len(self.obb_list)}")
+                    # Show class selection dialog
+                    result = self.show_class_selection_dialog()
+                    
+                    if result['confirmed']:
+                        self.obb_list.append((corners, result['class_id']))
+                        self.redraw_all_boxes()
+                        self.update_annotations_list()
+                        class_name = CLASS_LABELS.get(result['class_id'], result['class_id'])
+                        self.status_var.set(f"✓ Box #{len(self.obb_list)} created ({class_name})! Total: {len(self.obb_list)}")
+                    else:
+                        self.status_var.set("Box creation cancelled")
                 else:
                     self.status_var.set(f"⚠ Box too small (min {MIN_AREA}px²)")
             
@@ -660,13 +821,13 @@ class OBBAnnotator:
     
     def get_box_at_point(self, cx, cy):
         img_x, img_y = self.canvas_to_image(cx, cy)
-        for idx, corners in enumerate(self.obb_list):
+        for idx, (corners, class_id) in enumerate(self.obb_list):
             if self.point_in_polygon(img_x, img_y, corners):
                 return idx
         return None
     
     def get_rotation_handle_at_point(self, cx, cy):
-        for idx, corners in enumerate(self.obb_list):
+        for idx, (corners, class_id) in enumerate(self.obb_list):
             for corner_x, corner_y in corners:
                 handle_cx, handle_cy = self.image_to_canvas(corner_x, corner_y)
                 dist = math.sqrt((cx - handle_cx)**2 + (cy - handle_cy)**2)
@@ -678,7 +839,7 @@ class OBBAnnotator:
         """Check if point is near an edge of any box. Returns (box_idx, edge_idx)"""
         threshold = 8  # Distance threshold for edge detection
         
-        for idx, corners in enumerate(self.obb_list):
+        for idx, (corners, class_id) in enumerate(self.obb_list):
             canvas_corners = [self.image_to_canvas(x, y) for x, y in corners]
             
             # Check each edge
@@ -736,15 +897,15 @@ class OBBAnnotator:
         self.canvas.delete('label')
         self.box_graphics.clear()
         
-        for idx, corners in enumerate(self.obb_list):
-            self.draw_box(idx, corners, selected=(idx == self.selected_box_idx))
+        for idx, (corners, class_id) in enumerate(self.obb_list):
+            self.draw_box(idx, corners, class_id, selected=(idx == self.selected_box_idx))
     
     def redraw_box(self, idx):
         if idx < len(self.obb_list):
-            corners = self.obb_list[idx]
-            self.draw_box(idx, corners, selected=True, clear_old=True)
+            corners, class_id = self.obb_list[idx]
+            self.draw_box(idx, corners, class_id, selected=True, clear_old=True)
     
-    def draw_box(self, idx, corners, selected=False, clear_old=False):
+    def draw_box(self, idx, corners, class_id, selected=False, clear_old=False):
         if clear_old:
             self.canvas.delete(f'box_{idx}')
             self.canvas.delete(f'handle_{idx}')
@@ -767,8 +928,12 @@ class OBBAnnotator:
         
         cx = sum(x for x, y in canvas_corners) / 4
         cy = sum(y for x, y in canvas_corners) / 4
-        self.canvas.create_text(cx, cy - 15, text=f"#{idx+1}", fill='#00ff00',
-                               font=('Arial', 11, 'bold'), tags=('label', f'label_{idx}'))
+        
+        # Show box number and class
+        class_name = CLASS_LABELS.get(class_id, class_id)
+        label_text = f"#{idx+1}: {class_name}"
+        self.canvas.create_text(cx, cy - 15, text=label_text, fill='#00ff00',
+                               font=('Arial', 10, 'bold'), tags=('label', f'label_{idx}'))
     
     def highlight_box(self, idx):
         self.redraw_all_boxes()
@@ -781,13 +946,24 @@ class OBBAnnotator:
             self.info_text.insert('1.0', "No image loaded")
             return
         
+        # Show current image info with annotation status
+        img_name = Path(self.image_path).name
+        label_file = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
+        status_icon = "✓" if label_file.exists() else "○"
+        
+        header = f"📄 {img_name} {status_icon}\n{'═' * 35}\n\n"
+        
         if self.selected_box_idx is not None and self.selected_box_idx < len(self.obb_list):
-            corners = self.obb_list[self.selected_box_idx]
+            corners, class_id = self.obb_list[self.selected_box_idx]
             norm_corners = [(x/self.W, y/self.H) for x, y in corners]
             
-            info = f"═══ BOX #{self.selected_box_idx + 1} ═══\n\n"
+            class_name = CLASS_LABELS.get(class_id, class_id)
+            
+            info = header
+            info += f"═══ BOX #{self.selected_box_idx + 1} ═══\n\n"
+            info += f"Class: {class_name} (ID: {class_id})\n\n"
             info += "8-Point Format:\n"
-            info += f"{CLASS_ID}"
+            info += f"{class_id}"
             for x, y in norm_corners:
                 info += f" {x:.6f} {y:.6f}"
             info += "\n\n"
@@ -797,19 +973,22 @@ class OBBAnnotator:
             
             self.info_text.insert('1.0', info)
         else:
-            self.info_text.insert('1.0', f"Total Boxes: {len(self.obb_list)}\n\n"
-                                       f"Click a box to see details")
+            info = header
+            info += f"Total Boxes: {len(self.obb_list)}\n\n"
+            info += "Click a box to see details"
+            self.info_text.insert('1.0', info)
     
     def update_annotations_list(self):
         self.annotations_listbox.delete(0, tk.END)
         
-        for idx, corners in enumerate(self.obb_list):
+        for idx, (corners, class_id) in enumerate(self.obb_list):
             xs = [x for x, y in corners]
             ys = [y for x, y in corners]
             cx = sum(xs) / 4
             cy = sum(ys) / 4
             
-            self.annotations_listbox.insert(tk.END, f"#{idx+1}: ({cx:.0f}, {cy:.0f})")
+            class_name = CLASS_LABELS.get(class_id, class_id)
+            self.annotations_listbox.insert(tk.END, f"#{idx+1}: {class_name}")
         
         self.update_list_title()
     
@@ -870,9 +1049,9 @@ class OBBAnnotator:
         
         try:
             with open(out_txt, "w") as f:
-                for corners in self.obb_list:
+                for corners, class_id in self.obb_list:
                     norm_corners = [(x/self.W, y/self.H) for x, y in corners]
-                    line = CLASS_ID
+                    line = class_id
                     for x, y in norm_corners:
                         line += f" {x:.6f} {y:.6f}"
                     f.write(line + "\n")
