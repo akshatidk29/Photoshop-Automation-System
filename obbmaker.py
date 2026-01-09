@@ -519,51 +519,41 @@ class OBBAnnotator:
         self.image_listbox.see(idx)
         
     def load_existing_annotations(self):
-        """Load existing annotations for current image"""
+        """Auto-load existing annotations for current image (no prompts)"""
         self.obb_list.clear()
         self.selected_box_idx = None
-        
+
         if not self.labels_folder:
             return
-        
+
         label_file = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
-        
-        if label_file.exists():
-            # Prompt user about existing annotations
-            response = messagebox.askyesnocancel(
-                "Existing Annotations Found",
-                f"Annotations already exist for this image.\n\n"
-                f"Yes: Load existing annotations\n"
-                f"No: Start fresh (will overwrite on save)\n"
-                f"Cancel: Go back",
-                icon='warning'
-            )
-            
-            if response is None:  # Cancel
-                # Go back to previous image
-                if self.current_image_idx > 0:
-                    self.current_image_idx -= 1
-                return
-            elif response:  # Yes - load existing
-                try:
-                    with open(label_file, 'r') as f:
-                        for line in f:
-                            parts = line.strip().split()
-                            if len(parts) == 9:  # class_id + 8 coordinates
-                                class_id = parts[0]
-                                coords = [float(x) for x in parts[1:]]
-                                # Denormalize
-                                corners = [
-                                    (coords[0] * self.W, coords[1] * self.H),
-                                    (coords[2] * self.W, coords[3] * self.H),
-                                    (coords[4] * self.W, coords[5] * self.H),
-                                    (coords[6] * self.W, coords[7] * self.H)
-                                ]
-                                self.obb_list.append((corners, class_id))
-                    self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
-                except Exception as e:
-                    self.status_var.set(f"Error loading annotations: {str(e)}")
-            # else: No - start fresh (obb_list already cleared)
+
+        if not label_file.exists():
+            return
+
+        try:
+            with open(label_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) == 9:  # class_id + 8 normalized coords
+                        class_id = parts[0]
+                        coords = [float(x) for x in parts[1:]]
+
+                        # Denormalize back to pixel coordinates
+                        corners = [
+                            (coords[0] * self.W, coords[1] * self.H),
+                            (coords[2] * self.W, coords[3] * self.H),
+                            (coords[4] * self.W, coords[5] * self.H),
+                            (coords[6] * self.W, coords[7] * self.H),
+                        ]
+
+                        self.obb_list.append((corners, class_id))
+
+            self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
+
+        except Exception as e:
+            self.status_var.set(f"Error loading annotations: {str(e)}")
+
         
     def prev_image(self):
         """Navigate to previous image"""
