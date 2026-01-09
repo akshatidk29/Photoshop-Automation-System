@@ -55,8 +55,8 @@ CLASS_LABELS = {
 }
 
 MIN_AREA = 200             # ignore tiny boxes
-IMAGES_FOLDER = "path/to/images"      # <-- SET YOUR IMAGES FOLDER
-LABELS_FOLDER = "annotations"      # <-- SET YOUR LABELS FOLDER
+IMAGES_FOLDER = "Data_/Images"      # <-- SET YOUR IMAGES FOLDER
+LABELS_FOLDER = "Data_/Annotations"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
 
 class OBBAnnotator:
@@ -437,13 +437,13 @@ class OBBAnnotator:
         # Supported formats
         extensions = ['.jpg', '.jpeg', '.png', '.bmp']
         
-        self.image_files = []
+        found_files = set()
         # Use ** for recursive search through all subdirectories
         for ext in extensions:
-            self.image_files.extend(Path(self.images_folder).rglob(f"*{ext}"))
-            self.image_files.extend(Path(self.images_folder).rglob(f"*{ext.upper()}"))
+            found_files.update(Path(self.images_folder).rglob(f"*{ext}"))
+            found_files.update(Path(self.images_folder).rglob(f"*{ext.upper()}"))
         
-        self.image_files = sorted(self.image_files)
+        self.image_files = sorted(list(found_files))
         
         if not self.image_files:
             messagebox.showwarning("No Images", "No images found in the selected folder and its subdirectories!")
