@@ -30,6 +30,8 @@ model.train(
     scale=0.5,
     translate=0.1,
     hsv_h=0.015,
+    perspective=0.001,
+    shear=5.0,
     hsv_s=0.5,
     hsv_v=0.4,
     patience=30,
