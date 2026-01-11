@@ -1,345 +1,230 @@
-import cv2
-import mediapipe as mp
-import math
+"""
+Garment Detector using YOLO OBB Model.
+
+Provides coordinates, rotation, and logo scale for garment regions.
+Uses OBB (Oriented Bounding Box) detection for accurate region detection.
+"""
+
 import os
-from core.utils import normalizeLocation, isDualImage
+from pathlib import Path
 
-# Initialize MediaPipe Pose
-mpPose = mp.solutions.pose
-LANDMARKS = mpPose.PoseLandmark
+# Import OBB detector
+try:
+    from model.inference.obb_garment_detector import OBBGarmentDetector, PLACEMENT_CONFIG
+except ImportError:
+    # Fallback for different import paths
+    import sys
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    from model.inference.obb_garment_detector import OBBGarmentDetector, PLACEMENT_CONFIG
 
-# Cached landmarks to avoid re-processing the same image
-_garmentLandmarkCache = {}
 
-def r(val):
-    """Round to int."""
-    return int(round(val))
-
-def _cacheKey(path, side="full"):
-    """
-    Cache key based on path, mtime, and crop side.
-    side: 'full', 'left', 'right'
-    """
-    try:
-        mtime = os.path.getmtime(path)
-    except:
-        mtime = 0
-    return (os.path.abspath(path), mtime, side)
-
-def getPoseLandmarks(imagePath, side="full"):
-    """
-    Get landmarks for the image (or a specific crop).
-    side: 'full', 'left' (Back), 'right' (Front)
-    """
-    key = _cacheKey(imagePath, side)
-    if key in _garmentLandmarkCache:
-        return _garmentLandmarkCache[key]
-
-    image = cv2.imread(imagePath)
-    if image is None:
-        raise ValueError(f"Image not found: {imagePath}")
-
-    h, w, _ = image.shape
+# Location name mapping: Excel format -> OBB class names
+LOCATION_MAP = {
+    # Front regions
+    "FULL-FRONT": "FULL_FRONT",
+    "LEFT-CHEST": "LEFT_CHEST",
+    "RIGHT-CHEST": "RIGHT_CHEST",
+    "LEFT-COLLAR": "LEFT_COLLAR",
+    "RIGHT-COLLAR": "RIGHT_COLLAR",
+    "LEFT-BICEP": "LEFT_BICEP",
+    "RIGHT-BICEP": "RIGHT_BICEP",
+    "LEFT-SLEEVE": "LEFT_SLEEVE",
+    "RIGHT-SLEEVE": "RIGHT_SLEEVE",
+    "LEFT-CUFF": "LEFT_CUFF",
+    "RIGHT-CUFF": "RIGHT_CUFF",
+    "LEFT-HIP": "LEFT_HIP",
+    "RIGHT-HIP": "RIGHT_HIP",
+    "LEFT-THIGH-HIGH": "LEFT_THIGH_HIGH",
+    "RIGHT-THIGH-HIGH": "RIGHT_THIGH_HIGH",
+    "ON-POCKET": "ON_POCKET",
     
-    # Handle Cropping for Dual Images
-    # "left people is back side and right will be front"
-    offsetX = 0
-    offsetY = 0
-    processImage = image
-    
-    if side == "left":
-        # Left half (Back)
-        processImage = image[:, :w//2]
-        offsetX = 0
-    elif side == "right":
-        # Right half (Front)
-        processImage = image[:, w//2:]
-        offsetX = w//2
-        
-    ph, pw, _ = processImage.shape
-
-    with mpPose.Pose(static_image_mode=True, min_detection_confidence=0.5) as pose:
-        results = pose.process(cv2.cvtColor(processImage, cv2.COLOR_BGR2RGB))
-        
-        if not results.pose_landmarks:
-            if side != "full":
-                raise ValueError(f"No person detected in {side} half of image!")
-            raise ValueError("No person detected in image!")
-
-        landmarks = results.pose_landmarks.landmark
-    
-        _garmentLandmarkCache[key] = (landmarks, (ph, pw), (offsetX, offsetY))
-        return _garmentLandmarkCache[key]
-
-def getGarmentCoordinates(imagePath, locationName, debug=False):
-    """
-    Get coordinates using MediaPipe. 
-    Handles logic for Single vs Dual(Split) images.
-    """
-    normLoc = normalizeLocation(locationName)    
-    pass
-
-# We will implement the signature assuming main.py passes original context.
-# We will define the strict offsets here.
-
-GARMENT_OFFSETS = {
-    # Offsets are (x, y) relative to the calculated point
-    # SINGLE / FRONT (Right side if dual)
-    "FULL-FRONT": {"target": "SHOULDERS_MID", "x": 0, "y": 170},
-    "LEFT-BICEP": {"target": "LEFT_BICEP_MID", "x": 42, "y": -35},
-    "RIGHT-BICEP": {"target": "RIGHT_BICEP_MID", "x": -71, "y": -13},
-    "LEFT-CHEST": {"target": "LEFT_CHEST_ZONE", "x": 0, "y": 80}, # Custom logic
-    "RIGHT-CHEST": {"target": "RIGHT_CHEST_ZONE", "x": 0, "y": 80},
-    "LEFT-COLLAR": {"target": "LEFT_SHOULDER", "x": -189, "y": -100},
-    "RIGHT-COLLAR": {"target": "RIGHT_SHOULDER", "x": 185, "y": -110},
-    "LEFT-CUFF": {"target": "LEFT_WRIST", "x": -10, "y": 2},
-    "RIGHT-CUFF": {"target": "RIGHT_WRIST", "x": -11, "y": -16},
-    "LEFT-HIP": {"target": "LEFT_HIP", "x": 50, "y": 16},
-    "RIGHT-HIP": {"target": "RIGHT_HIP", "x": -40, "y": 16},
-    "LEFT-SLEEVE": {"target": "LEFT_SLEEVE_ZONE", "x": 42, "y": -48},
-    "RIGHT-SLEEVE": {"target": "RIGHT_SLEEVE_ZONE", "x": -9, "y": -46},
-    "LEFT-THIGH-HIGH": {"target": "LEFT_HIP", "x": 60, "y": 16},
-    "RIGHT-THIGH-HIGH": {"target": "RIGHT_HIP", "x": -60, "y": 16},
-    "ON-POCKET": {"target": "HIPS_MID", "x": 220, "y": -634},
-    
-    # BACK (Left side if dual)
-    "FULL-BACK": {"target": "SHOULDERS_MID", "x": -30, "y": 80},
-    "BACK-YOKE": {"target": "SHOULDERS_MID", "x": -21, "y": -87},
+    # Back regions
+    "FULL-BACK": "FULL_BACK",
+    "BACK-YOKE": "BACK_YOKE",
 }
 
-def getGarmentCoordinates(imagePath, locationName, originalLocation=None, debug=False):
-    # If main.py hasn't been updated yet, originalLocation might be None.
-    # Fallback: assume locationName is originalLocation if None
-    contextLoc = originalLocation if originalLocation else locationName
+
+# Singleton OBB detector instance (lazy loaded)
+_obb_detector = None
+_detection_cache = {}
+
+
+def _get_obb_detector():
+    """Get or create the OBB detector singleton."""
+    global _obb_detector
+    if _obb_detector is None:
+        print("[GarmentDetector] Initializing OBB detector...")
+        _obb_detector = OBBGarmentDetector()
+        print("[GarmentDetector] OBB detector ready.")
+    return _obb_detector
+
+
+def _get_cached_regions(imagePath):
+    """Get cached detection results for an image."""
+    global _detection_cache
     
-    normLoc = normalizeLocation(locationName)
-    isDual = isDualImage(contextLoc)
-    
-    # Determine side
-    side = "full"
-    if isDual:
-        # Check if the specific target is on Back or Front
-        if "BACK" in normLoc:
-            side = "left" # Back is Left
-        else:
-            side = "right" # Front is Right
-    
-    # Get Landmarks
+    # Create cache key from path and mtime
     try:
-        landmarks, (ph, pw), (offX, offY) = getPoseLandmarks(imagePath, side)
-    except Exception as e:
-        if side == "full" and isDual:
-             # Fallback: maybe we shouldn't have treated it as full?
-             pass
-        raise e
-
-    # Helper to get point
-    def getP(lm):
-        return (landmarks[lm].x * pw, landmarks[lm].y * ph)
-
-    targetConfig = GARMENT_OFFSETS.get(normLoc, GARMENT_OFFSETS.get("FULL-FRONT")) # Default to Front logic?
-    
-    # Basic calcs
-    leftSh = getP(LANDMARKS.LEFT_SHOULDER)
-    rightSh = getP(LANDMARKS.RIGHT_SHOULDER)
-    
-    x, y = 0, 0
-    target = targetConfig.get("target", "SHOULDERS_MID")
-    
-    if target == "SHOULDERS_MID":
-        x = (leftSh[0] + rightSh[0]) / 2
-        y = (leftSh[1] + rightSh[1]) / 2
-        
-    elif target == "LEFT_BICEP_MID":
-        lElbow = getP(LANDMARKS.LEFT_ELBOW)
-        x = (leftSh[0] + lElbow[0]) / 2
-        y = (leftSh[1] + lElbow[1]) / 2
-        
-    elif target == "RIGHT_BICEP_MID":
-        rElbow = getP(LANDMARKS.RIGHT_ELBOW)
-        x = (rightSh[0] + rElbow[0]) / 2
-        y = (rightSh[1] + rElbow[1]) / 2
-        
-    elif target == "LEFT_CHEST_ZONE":
-        # Shoulder bias
-        x = leftSh[0]
-        y = (leftSh[1] + rightSh[1]) / 2
-        # Special logic from original: alpha=0.5 bias
-        midX = (leftSh[0] + rightSh[0]) / 2
-        x = midX + 0.5 * (leftSh[0] - midX)
-        if side == "right" or not isDual: # Standard Front
-             x += 18 # Offset from bias logic
-        
-    elif target == "RIGHT_CHEST_ZONE":
-        midX = (leftSh[0] + rightSh[0]) / 2
-        y = (leftSh[1] + rightSh[1]) / 2
-        x = midX + 0.5 * (rightSh[0] - midX)
-        if side == "right" or not isDual: 
-             x += -20
-
-    elif target == "LEFT_SHOULDER":
-        x, y = leftSh
-        
-    elif target == "RIGHT_SHOULDER":
-        x, y = rightSh
-        
-    elif target == "LEFT_WRIST":
-        x, y = getP(LANDMARKS.LEFT_WRIST)
-        
-    elif target == "RIGHT_WRIST":
-        x, y = getP(LANDMARKS.RIGHT_WRIST)
-        
-    elif target == "LEFT_HIP":
-        x, y = getP(LANDMARKS.LEFT_HIP)
-        
-    elif target == "RIGHT_HIP":
-        x, y = getP(LANDMARKS.RIGHT_HIP)
-        
-    elif target == "HIPS_MID":
-        lH = getP(LANDMARKS.LEFT_HIP)
-        rH = getP(LANDMARKS.RIGHT_HIP)
-        x = (lH[0] + rH[0]) / 2
-        y = (lH[1] + rH[1]) / 2
-        
-    elif target == "LEFT_SLEEVE_ZONE":
-        lElbow = getP(LANDMARKS.LEFT_ELBOW)
-        # Weighted 0.7
-        x = leftSh[0] + 0.7 * (lElbow[0] - leftSh[0])
-        y = leftSh[1] + 0.7 * (lElbow[1] - leftSh[1])
-        
-    elif target == "RIGHT_SLEEVE_ZONE":
-        rElbow = getP(LANDMARKS.RIGHT_ELBOW)
-        x = rightSh[0] + 0.7 * (rElbow[0] - rightSh[0])
-        y = rightSh[1] + 0.7 * (rElbow[1] - rightSh[1])
-
-    # Apply global offsets
-    finalX = x + targetConfig["x"] + offX
-    finalY = y + targetConfig["y"] + offY
-    
-    return int(finalX), int(finalY)
-
-
-def getAngleBetweenPoints(p1, p2):
-    """Calculate angle in degrees between two points (normalized 0..1)."""
-    dx = p2.x - p1.x
-    dy = p2.y - p1.y
-    return math.degrees(math.atan2(dy, dx))
-
-def getGarmentRotationAngle(imagePath, locationName):
-    """Get rotation angle for logo placement based on body pose."""
-    normLoc = normalizeLocation(locationName)
-    isDual = isDualImage(locationName)
-    side = "full"
-    if isDual:
-        if "BACK" in normLoc:
-            side = "left"
-        else:
-            side = "right"
-            
-    try:
-        landmarks, (ph, pw), _ = getPoseLandmarks(imagePath, side)
+        mtime = os.path.getmtime(imagePath)
     except:
-        return 0
+        mtime = 0
+    
+    key = (os.path.abspath(imagePath), mtime)
+    
+    if key not in _detection_cache:
+        detector = _get_obb_detector()
+        regions = detector.detect(imagePath)
+        _detection_cache[key] = {r.class_name: r for r in regions}
+    
+    return _detection_cache[key]
 
-    if normLoc in ["LEFT-BICEP", "LEFT-SLEEVE"]:
-        # If we are looking at Front (Right crop), Left Sleeve is on listener's right.
-        # Check landmarks. MediaPipe is relative to the *person*.
-        return getAngleBetweenPoints(landmarks[LANDMARKS.LEFT_SHOULDER], landmarks[LANDMARKS.LEFT_ELBOW])
+
+def _normalize_location(locationName):
+    """Normalize location name to match LOCATION_MAP keys."""
+    if not locationName:
+        return ""
+    # Uppercase and replace spaces with hyphens
+    normalized = str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
+    return normalized
+
+
+def _get_obb_class_name(locationName):
+    """Convert Excel location name to OBB class name."""
+    normalized = _normalize_location(locationName)
+    return LOCATION_MAP.get(normalized, normalized.replace("-", "_"))
+
+
+def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
+    """
+    Get (x, y) coordinates for logo placement using OBB detector.
+    
+    Args:
+        imagePath: Path to the garment image.
+        locationName: Location name (e.g., "LEFT-CHEST", "FULL-FRONT").
+        originalLocation: Optional, original location context (for combo positions).
+        debug: Enable debug output.
         
-    elif normLoc in ["RIGHT-BICEP", "RIGHT-SLEEVE"]:
-        return getAngleBetweenPoints(landmarks[LANDMARKS.RIGHT_SHOULDER], landmarks[LANDMARKS.RIGHT_ELBOW])
+    Returns:
+        (x, y) tuple of coordinates, or None if region not found.
+    """
+    try:
+        regions = _get_cached_regions(imagePath)
+        obb_name = _get_obb_class_name(locationName)
         
-    elif normLoc == "LEFT-CUFF":
-        return getAngleBetweenPoints(landmarks[LANDMARKS.LEFT_ELBOW], landmarks[LANDMARKS.LEFT_WRIST])
+        if debug:
+            print(f"[getCoordinates] Looking for '{obb_name}' in {list(regions.keys())}")
         
-    elif normLoc == "RIGHT-CUFF":
-        return getAngleBetweenPoints(landmarks[LANDMARKS.RIGHT_ELBOW], landmarks[LANDMARKS.RIGHT_WRIST])
+        if obb_name in regions:
+            region = regions[obb_name]
+            coords = (int(region.center[0]), int(region.center[1]))
+            if debug:
+                print(f"[getCoordinates] Found {obb_name} at {coords}")
+            return coords
         
-    elif normLoc == "LEFT-COLLAR":
-        return getAngleBetweenPoints(landmarks[LANDMARKS.LEFT_SHOULDER], landmarks[LANDMARKS.LEFT_EAR])
+        # Not found
+        if debug:
+            print(f"[getCoordinates] Region '{obb_name}' not found!")
+        return None
         
-    elif normLoc == "RIGHT-COLLAR":
-        return getAngleBetweenPoints(landmarks[LANDMARKS.RIGHT_SHOULDER], landmarks[LANDMARKS.RIGHT_EAR])
+    except Exception as e:
+        print(f"[getCoordinates] Error: {e}")
+        return None
+
+
+def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
+    """
+    Get (width, height) for logo based on OBB placement config.
+    
+    Args:
+        imagePath: Path to the garment image.
+        locationName: Location name.
+        baseSize: Default base size (unused, kept for interface compatibility).
         
-    return 0
+    Returns:
+        (width, height) tuple for the logo.
+    """
+    obb_name = _get_obb_class_name(locationName)
+    config = PLACEMENT_CONFIG.get(obb_name, {"base_size": 99})
+    base = config.get("base_size", 99)
+    
+    # Return square size based on config
+    return (base, base)
+
+
+def getRotation(imagePath, locationName):
+    """
+    Get rotation angle for logo placement using OBB detector.
+    
+    The rotation angle comes directly from the OBB bounding box orientation.
+    Logo should be rotated by this angle to align with the garment region.
+    
+    Args:
+        imagePath: Path to the garment image.
+        locationName: Location name.
+        
+    Returns:
+        Rotation angle in degrees (for OpenCV/Photoshop).
+    """
+    try:
+        regions = _get_cached_regions(imagePath)
+        obb_name = _get_obb_class_name(locationName)
+        
+        if obb_name in regions:
+            region = regions[obb_name]
+            # Return negated angle (OBB uses counterclockwise, Photoshop uses clockwise)
+            return -region.angle
+        
+        return 0.0
+        
+    except Exception as e:
+        print(f"[getRotation] Error: {e}")
+        return 0.0
+
+
+# ============================================
+# Legacy compatibility functions
+# ============================================
+
+def getGarmentCoordinates(imagePath, locationName, originalLocation=None, debug=False):
+    """Legacy function name - calls getCoordinates."""
+    return getCoordinates(imagePath, locationName, originalLocation, debug)
 
 
 def getGarmentLogoScale(imagePath, locationName, baseLogoSize=(200, 100)):
-    """Calculate appropriate logo scale based on body landmarks."""
-    normLoc = normalizeLocation(locationName)
-    isDual = isDualImage(locationName)
+    """Legacy function name - calls getLogoScale."""
+    return getLogoScale(imagePath, locationName, baseLogoSize)
+
+
+def getGarmentRotationAngle(imagePath, locationName):
+    """Legacy function name - calls getRotation."""
+    return getRotation(imagePath, locationName)
+
+
+# ============================================
+# Testing
+# ============================================
+
+if __name__ == "__main__":
+    import sys
     
-    side = "full"
-    if isDual:
-        if "BACK" in normLoc:
-            side = "left"
-        else:
-            side = "right"
-
-    try:
-        landmarks, (ph, pw), _ = getPoseLandmarks(imagePath, side)
-    except:
-        return baseLogoSize
-        
-    p1, p2 = None, None
+    if len(sys.argv) < 2:
+        print("Usage: python garmentDetector.py <image_path> [location]")
+        sys.exit(1)
     
-    if normLoc in ["LEFT-BICEP", "RIGHT-BICEP", "LEFT-SLEEVE", "RIGHT-SLEEVE"]:
-        if "LEFT" in normLoc:
-            p1 = landmarks[LANDMARKS.LEFT_SHOULDER]
-            p2 = landmarks[LANDMARKS.LEFT_ELBOW]
-        else:
-            p1 = landmarks[LANDMARKS.RIGHT_SHOULDER]
-            p2 = landmarks[LANDMARKS.RIGHT_ELBOW]
-            
-    elif normLoc in ["LEFT-CHEST", "RIGHT-CHEST"]:
-        p1 = landmarks[LANDMARKS.NOSE]
-        # Distance to shoulder
-        if "LEFT" in normLoc:
-            p2 = landmarks[LANDMARKS.LEFT_SHOULDER]
-        else:
-            p2 = landmarks[LANDMARKS.RIGHT_SHOULDER]
-            
-    elif normLoc in ["FULL-FRONT", "FULL-BACK", "FULL-BACK-FULL-FRONT"]: # Standardize?
-        # Use simple shoulder width
-        p1 = landmarks[LANDMARKS.LEFT_SHOULDER]
-        p2 = landmarks[LANDMARKS.RIGHT_SHOULDER]
-    else:
-        return baseLogoSize
-        
-    if not p1 or not p2:
-        return baseLogoSize
-
-    # Calculate pixel distance
-    dx = (p2.x - p1.x) * pw
-    dy = (p2.y - p1.y) * ph
-    distance = (dx*dx + dy*dy)**0.5
+    img_path = sys.argv[1]
+    location = sys.argv[2] if len(sys.argv) > 2 else "FULL-FRONT"
     
-    if baseLogoSize[0] == 0: return baseLogoSize
+    print(f"\nTesting OBB Garment Detector")
+    print(f"Image: {img_path}")
+    print(f"Location: {location}")
+    print("-" * 40)
     
-    scaleFactor = distance / baseLogoSize[0]
-    newWidth = int(baseLogoSize[0] * scaleFactor * 0.6)
-    newHeight = int(baseLogoSize[1] * scaleFactor * 0.6)
+    coords = getCoordinates(img_path, location, debug=True)
+    scale = getLogoScale(img_path, location)
+    rotation = getRotation(img_path, location)
     
-    return (newWidth, newHeight)
-
-
-
-
-
-# Main
-
-def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
-    """Standard Interface: Get (x, y) coordinates."""
-    # We pass originalLocationContext if available
-    return getGarmentCoordinates(imagePath, locationName, originalLocation, debug)
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """Standard Interface: Get (width, height) for logo."""
-    return getGarmentLogoScale(imagePath, locationName, baseSize)
-
-def getRotation(imagePath, locationName):
-    """Standard Interface: Get rotation angle."""
-    return getGarmentRotationAngle(imagePath, locationName)
-
-# Legacy aliases if needed internally, but prefer using standard names in future.
-
+    print(f"\nResults:")
+    print(f"  Coordinates: {coords}")
+    print(f"  Logo Scale: {scale}")
+    print(f"  Rotation: {rotation:.1f}°")

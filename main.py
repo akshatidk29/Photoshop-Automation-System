@@ -51,15 +51,33 @@ class AutomationGUI:
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
 
-        self.excelPath = None
-        self.imageRoot = None
-        self.logoRoot = None
+        # Default paths - EDIT THESE TO YOUR PATHS
+        DEFAULT_EXCEL = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Sheet.xlsx"
+        DEFAULT_IMAGES = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Images"
+        DEFAULT_LOGOS = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Logos"
+        
+        # Set defaults if paths exist
+        self.excelPath = DEFAULT_EXCEL if os.path.exists(DEFAULT_EXCEL) else None
+        self.imageRoot = DEFAULT_IMAGES if os.path.exists(DEFAULT_IMAGES) else None
+        self.logoRoot = DEFAULT_LOGOS if os.path.exists(DEFAULT_LOGOS) else None
+        
         self.processing = False
         self.totalRows = 0
         self.processedRows = 0
         self.startTime = None
 
         self.buildUi()
+        
+        # Update labels with defaults if set
+        if self.excelPath:
+            self.excelLabel.config(text=f"Selected: {os.path.basename(self.excelPath)}", fg="green")
+        if self.imageRoot:
+            self.imageLabel.config(text=f"Selected: {os.path.basename(self.imageRoot)}", fg="green")
+        if self.logoRoot:
+            self.logoLabel.config(text=f"Selected: {os.path.basename(self.logoRoot)}", fg="green")
+        
+        # Enable start button if all defaults are valid
+        self.checkEnableStart()
 
     def buildUi(self):
         """Build the user interface."""
@@ -321,16 +339,24 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
                 
                 try:
                     coordinatesList = []
+                    rotationsList = []  # NEW: collect rotation angles
                     valid = True
                     
-                    # Compute coordinates for ALL positions on this image
+                    # Compute coordinates and rotations for ALL positions on this image
                     for pos in positions:
                         try:
                             # Standard Call: (image, location, *optionalContext)
-                            # Some detectors ignore originalLocation, which is fine.
                             coords = detector.getCoordinates(imgPath, pos, originalLocation=locationName)
                             coordinatesList.append(coords)
-                            rLog.log(f"  Coords for {pos}: {coords}")
+                            
+                            # NEW: Get rotation angle for this position
+                            try:
+                                rotation = detector.getRotation(imgPath, pos)
+                            except:
+                                rotation = 0.0
+                            rotationsList.append(rotation)
+                            
+                            rLog.log(f"  Coords for {pos}: {coords}, Rotation: {rotation:.1f}°")
                         except Exception as e:
                             rLog.error(f"  Failed specific pos {pos}: {e}")
                             valid = False
@@ -349,17 +375,17 @@ def runAutomation(excelPath, imageRoot, logoRoot, defaultCanvasHeight=1800, gui=
                         except:
                              finalLogoDims = (200, 100)
                     
-                    # Add to Batch
+                    # Add to Batch (now with rotation)
                     if isCombo:
                         ok = batchMgr.addCombo(
                             partId, imgPath, logoPath, f"{partId} {color}.jpg",
-                            decorationCode, positions, coordinatesList,
+                            decorationCode, positions, coordinatesList, rotationsList,
                             garmentType, finalLogoDims, finalName, activeHeight
                         )
                     else:
                         ok = batchMgr.addPair(
                             partId, imgPath, logoPath, f"{partId} {color}.jpg",
-                            decorationCode, positions[0], coordinatesList[0],
+                            decorationCode, positions[0], coordinatesList[0], rotationsList[0],
                             garmentType, finalLogoDims, finalName, activeHeight
                         )
                         

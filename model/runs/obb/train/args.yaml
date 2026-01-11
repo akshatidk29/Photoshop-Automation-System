@@ -1,12 +1,12 @@
 task: obb
 mode: train
-model: models/yolo11n-obb.pt
-data: C:\Users\Akshat Mittal\Desktop\photoshopAutomation\model\dataset\data.yaml
+model: models/yolo11s-obb.pt
+data: /DATA/idk/photoshopAutomation/model/dataset/data.yaml
 epochs: 150
 time: null
 patience: 30
-batch: 8
-imgsz: 640
+batch: 24
+imgsz: 1024
 save: true
 save_period: -1
 cache: false
@@ -90,7 +90,7 @@ degrees: 10
 translate: 0.1
 scale: 0.5
 shear: 0.0
-perspective: 0.0
+perspective: 0.001
 flipud: 0.0
 fliplr: 0.5
 bgr: 0.0
@@ -103,4 +103,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\Users\Akshat Mittal\Desktop\photoshopAutomation\model\runs\obb\train
+save_dir: /DATA/idk/photoshopAutomation/model/runs/obb/train

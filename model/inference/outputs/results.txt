@@ -1,0 +1,61 @@
+[ultralytics.engine.results.Results object with attributes:
+
+boxes: ultralytics.engine.results.Boxes object
+keypoints: None
+masks: ultralytics.engine.results.Masks object
+names: {0: 'FULL_BACK', 1: 'FULL_FRONT', 2: 'LEFT_BICEP', 3: 'RIGHT_BICEP', 4: 'LEFT_CHEST', 5: 'RIGHT_CHEST', 6: 'LEFT_COLLAR', 7: 'RIGHT_COLLAR', 8: 'LEFT_CUFF', 9: 'RIGHT_CUFF', 10: 'LEFT_HIP', 11: 'RIGHT_HIP', 12: 'LEFT_SLEEVE', 13: 'RIGHT_SLEEVE', 14: 'LEFT_THIGH_HIGH', 15: 'RIGHT_THIGH_HIGH', 16: 'ON_POCKET', 17: 'BACK_YOKE'}
+obb: None
+orig_img: array([[[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]],
+
+       [[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]],
+
+       [[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]],
+
+       ...,
+
+       [[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]],
+
+       [[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]],
+
+       [[255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255],
+        ...,
+        [255, 255, 255],
+        [255, 255, 255],
+        [255, 255, 255]]], shape=(1800, 1200, 3), dtype=uint8)
+orig_shape: (1800, 1200)
+path: 'C:\\Users\\Akshat Mittal\\Desktop\\photoshopAutomation\\model\\inference\\test5.jpg'
+probs: None
+save_dir: 'C:\\Users\\Akshat Mittal\\Desktop\\photoshopAutomation\\model\\inference\\runs\\segment\\predict4'
+speed: {'preprocess': 6.234400032553822, 'inference': 167.5868000020273, 'postprocess': 88.01690000109375}]

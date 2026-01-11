@@ -21,7 +21,7 @@ def main():
         device = "cpu"
 
     # load OBB model weights
-    model = YOLO("models/yolo11n-seg.pt")
+    model = YOLO("models/yolo11s-seg.pt")
 
     # Dynamically resolve path to data.yaml
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,12 +38,13 @@ def main():
         task="segment",
         data=data_yaml_path,
         epochs=150,
-        imgsz=640,
-        batch=8,               # Increased batch size for GPU (adjust based on VRAM)
+        imgsz=1024,
+        batch=24,               # Increased batch size for GPU (adjust based on VRAM)
         optimizer="AdamW",
         lr0=0.001,
         lrf=0.01,
         cos_lr=True,
+        perspective=0.001,
         warmup_epochs=3,
         degrees=10,
         scale=0.5,

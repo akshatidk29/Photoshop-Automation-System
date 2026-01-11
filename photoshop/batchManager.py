@@ -1,5 +1,6 @@
 import os
 import win32com.client
+import pythoncom
 from services.logger import logError
 from core.config import PSD_OUTPUT_DIR, IMAGE_OUTPUT_DIR
 from .photoshopEngine import preparePairDoc
@@ -10,6 +11,8 @@ class PhotoshopBatchManager:
     
     def __init__(self, maxItemsPerBatch=200):
         print("Initializing PhotoshopBatchManager...")
+        # Initialize COM for this thread (required when called from a different thread)
+        pythoncom.CoInitialize()
         self.app = win32com.client.Dispatch("Photoshop.Application")
         self.app.Visible = True
         self.batchIndex = 1
@@ -70,7 +73,7 @@ class PhotoshopBatchManager:
             return False
 
     def addCombo(self, partId, imagePath, logoPath, targetName, decorationCode,
-                 positionsList, coordinatesList, garmentType, customLogoSize, finalName, canvasHeight=1200):
+                 positionsList, coordinatesList, rotationsList, garmentType, customLogoSize, finalName, canvasHeight=1200):
         """Add image with multiple logos (combo position) - creates ONE output image."""
         from .photoshopEngine import prepareComboPairDoc
         
@@ -79,8 +82,8 @@ class PhotoshopBatchManager:
             logError(f"Skipping combo because some coordinates missing for {targetName}")
             return False
         
-        # Create doc with ALL logos placed
-        tempDoc = prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList,
+        # Create doc with ALL logos placed (with rotation)
+        tempDoc = prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rotationsList,
                                        garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
         if tempDoc is None:
             logError(f"prepareComboPairDoc failed for {targetName}")
@@ -193,7 +196,7 @@ class PhotoshopBatchManager:
         return True
 
     def addPair(self, partId, imagePath, logoPath, targetName, decorationCode, 
-                locationName, coordinates, garmentType, customLogoSize, finalName, canvasHeight=1200):
+                locationName, coordinates, rotation, garmentType, customLogoSize, finalName, canvasHeight=1200):
         """Add image-logo pair to batch."""
         # Coordinates must be present
         if coordinates is None:
@@ -213,8 +216,8 @@ class PhotoshopBatchManager:
             logError(f"Skipping pair because coordinates missing for {targetName} | context: {ctx}")
             return False
 
-        # Create temp doc with placed logo
-        tempDoc = preparePairDoc(imagePath, logoPath, locationName, coordinates, 
+        # Create temp doc with placed logo (with rotation)
+        tempDoc = preparePairDoc(imagePath, logoPath, locationName, coordinates, rotation,
                                   garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
         if tempDoc is None:
             ctx = {
