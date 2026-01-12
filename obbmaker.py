@@ -95,15 +95,31 @@ class OBBAnnotator:
         self.obb_list = []  # List of (corners, class_id) tuples
         self.box_graphics = []
         
+        # Global clipboard for copy-paste
+        self.clipboard_annotations = None  # Will store: {'boxes': [...], 'source_W': ..., 'source_H': ...}
+        
+        # Track if current annotations are saved
+        self.annotations_modified = False
+        
+        # Track where current annotations were loaded from (for auto-save)
+        self.annotation_source_path = None
+        
+        # Box creation mode
+        self.box_creation_mode = tk.StringVar(value="99x66")
+        
+        # Custom box drawing state
+        self.custom_box_start = None
+        
         self.setup_ui()
         
         # Keyboard shortcuts
         self.root.bind('<Left>', lambda e: self.prev_image())
         self.root.bind('<Right>', lambda e: self.next_image())
         self.root.bind('<Delete>', lambda e: self.delete_selected())
-        self.root.bind('<Control-s>', lambda e: self.save_annotations())
-        self.root.bind('<Control-z>', lambda e: self.undo_last())
         self.root.bind('<Escape>', lambda e: self.cancel_drawing())
+        
+        # Intercept window close
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
     def setup_ui(self):
         # Top toolbar
@@ -146,7 +162,7 @@ class OBBAnnotator:
                  bg='#e24a90', fg='white', font=('Arial', 10, 'bold'),
                  relief=tk.FLAT, padx=15, pady=8, cursor='hand2').pack(side=tk.LEFT, padx=5)
         
-        # Auto-save checkbox
+        # Auto-save checkbox (kept for compatibility but not used for manual save)
         tk.Checkbutton(toolbar, text="Auto-save", variable=self.auto_save,
                       bg='#2d2d2d', fg='white', selectcolor='#1a1a1a',
                       font=('Arial', 10), activebackground='#2d2d2d').pack(side=tk.RIGHT, padx=20)
@@ -231,7 +247,7 @@ class OBBAnnotator:
         help_frame = tk.Frame(center_frame, bg='#1a1a1a')
         help_frame.pack(fill=tk.X, pady=(5, 0))
         
-        help_text = "💡 Click 4 points to create box | Click+Drag: Move | Drag edges: Resize | Drag corners: Rotate | Double-click: Delete | ESC: Cancel | ⬅➡: Navigate"
+        help_text = "💡 Click to create box (preset) | Click+Drag (custom mode) | Click+Drag: Move | Drag edges: Resize | Drag corners: Rotate | Double-click: Delete | ESC: Cancel | ⬅➡: Navigate"
         tk.Label(help_frame, text=help_text, bg='#1a1a1a', fg='#888888', 
                 font=('Arial', 9, 'italic')).pack(pady=5)
         
@@ -240,12 +256,30 @@ class OBBAnnotator:
         right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(5, 0))
         right_frame.pack_propagate(False)
         
+        # Box creation mode selector
+        mode_frame = tk.LabelFrame(right_frame, text="📐 Box Creation Mode", bg='#252525',
+                                   fg='white', font=('Arial', 11, 'bold'), bd=2)
+        mode_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        modes = [
+            ("99 × 66", "99x66"),
+            ("66 × 66", "66x66"),
+            ("300 × 200", "300x200"),
+            ("Custom (Click & Drag)", "custom")
+        ]
+        
+        for text, value in modes:
+            tk.Radiobutton(mode_frame, text=text, variable=self.box_creation_mode,
+                          value=value, bg='#252525', fg='white', selectcolor='#1a1a1a',
+                          font=('Arial', 10), activebackground='#252525',
+                          cursor='hand2').pack(anchor='w', padx=15, pady=3)
+        
         # Current box info
         info_frame = tk.LabelFrame(right_frame, text="📊 Current Selection", bg='#252525',
                                    fg='white', font=('Arial', 11, 'bold'), bd=2)
         info_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.info_text = tk.Text(info_frame, height=12, bg='#1a1a1a', fg='#00ff88',
+        self.info_text = tk.Text(info_frame, height=6, bg='#1a1a1a', fg='#00ff88',
                                 font=('Courier', 9), relief=tk.FLAT, wrap=tk.WORD)
         self.info_text.pack(fill=tk.X, padx=8, pady=8)
         self.update_info_display()
@@ -255,35 +289,40 @@ class OBBAnnotator:
                                      fg='white', font=('Arial', 11, 'bold'), bd=2)
         action_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        btn_config = {'font': ('Arial', 10, 'bold'), 'relief': tk.FLAT, 'pady': 10, 'cursor': 'hand2'}
+        btn_config = {'font': ('Arial', 9, 'bold'), 'relief': tk.FLAT, 'pady': 5, 'cursor': 'hand2'}
         
-        tk.Button(action_frame, text="💾 Save (Ctrl+S)", command=self.save_annotations,
-                 bg='#28a745', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        # Copy/Paste buttons
+        tk.Button(action_frame, text="📋 Copy", command=self.copy_current_annotations,
+                 bg='#6f42c1', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
         
-        # NEW: Copy from previous button
-        tk.Button(action_frame, text="📋 Copy from Previous", command=self.copy_from_previous,
-                 bg='#17a2b8', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="📥 Paste", command=self.paste_annotations,
+                 bg='#20c997', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
+        
+        tk.Button(action_frame, text="📋 Copy Previous", command=self.copy_from_previous,
+                 bg='#17a2b8', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
+        
+        # Duplicate button
+        tk.Button(action_frame, text="📑 Duplicate", command=self.duplicate_selected,
+                 bg='#fd7e14', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
+        
         # Category buttons (Add to garment / towel / cap / bag)
-        tk.Button(action_frame, text="➕ Add to garment", command=self.add_to_garment,
-                bg='#8e44ad', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="➕ Garment", command=self.add_to_garment,
+                bg='#8e44ad', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
 
-        tk.Button(action_frame, text="➕ Add to towel", command=self.add_to_towel,
-                bg='#f39c12', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="➕ Towel", command=self.add_to_towel,
+                bg='#f39c12', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
 
-        tk.Button(action_frame, text="➕ Add to cap", command=self.add_to_cap,
-                bg='#3498db', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="➕ Cap", command=self.add_to_cap,
+                bg='#3498db', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
 
-        tk.Button(action_frame, text="➕ Add to bag", command=self.add_to_bag,
-                bg='#27ae60', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="➕ Bag", command=self.add_to_bag,
+                bg='#27ae60', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
 
-        tk.Button(action_frame, text="🗑 Delete (Del)", command=self.delete_selected,
-                 bg='#dc3545', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
-        
-        tk.Button(action_frame, text="↶ Undo (Ctrl+Z)", command=self.undo_last,
-                 bg='#ffc107', fg='black', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+        tk.Button(action_frame, text="🗑 Delete", command=self.delete_selected,
+                 bg='#dc3545', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
         
         tk.Button(action_frame, text="🧹 Clear All", command=self.clear_all,
-                 bg='#6c757d', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=3)
+                 bg='#6c757d', fg='white', **btn_config).pack(fill=tk.X, padx=8, pady=1)
         
         # Annotations list
         list_frame = tk.LabelFrame(right_frame, text="📋 Annotations (0)", bg='#252525',
@@ -446,37 +485,131 @@ class OBBAnnotator:
         
         return result
     
+    def copy_current_annotations(self):
+        """Copy annotations from the current image to clipboard"""
+        if self.original_img is None:
+            messagebox.showinfo("Info", "No image loaded")
+            return
+        
+        if not self.obb_list:
+            messagebox.showinfo("Info", "No annotations to copy from current image")
+            return
+        
+        # Store current annotations in clipboard with current image dimensions
+        self.clipboard_annotations = {
+            'boxes': [(list(corners), class_id) for corners, class_id in self.obb_list],
+            'source_W': self.W,
+            'source_H': self.H
+        }
+        
+        self.status_var.set(f"✓ Copied {len(self.obb_list)} annotations to clipboard")
+    
+    def paste_annotations(self):
+        """Paste copied annotations to current image"""
+        if self.clipboard_annotations is None:
+            messagebox.showinfo("Info", "No annotations copied. Use 'Copy From File' first.")
+            return
+        
+        if self.original_img is None:
+            messagebox.showerror("Error", "No image loaded")
+            return
+        
+        # Get clipboard data
+        source_boxes = self.clipboard_annotations['boxes']
+        source_W = self.clipboard_annotations['source_W']
+        source_H = self.clipboard_annotations['source_H']
+        
+        # Calculate scale factors
+        sx = self.W / source_W
+        sy = self.H / source_H
+        
+        # Clear current annotations
+        self.obb_list.clear()
+        self.selected_box_idx = None
+        
+        # Scale and add boxes
+        for corners, class_id in source_boxes:
+            scaled_corners = [(x * sx, y * sy) for x, y in corners]
+            self.obb_list.append((scaled_corners, class_id))
+        
+        # Mark as modified
+        self.annotations_modified = True
+        
+        # Update UI
+        self.redraw_all_boxes()
+        self.update_annotations_list()
+        self.update_info_display()
+        self.status_var.set(f"✓ Pasted {len(self.obb_list)} annotations")
+    
+    def duplicate_selected(self):
+        """Duplicate the selected box (or last box if none selected) with a small offset"""
+        # If nothing selected, select the last box
+        if self.selected_box_idx is None or self.selected_box_idx >= len(self.obb_list):
+            if not self.obb_list:
+                messagebox.showinfo("Info", "No boxes to duplicate")
+                return
+            # Auto-select last box
+            self.selected_box_idx = len(self.obb_list) - 1
+        
+        corners, class_id = self.obb_list[self.selected_box_idx]
+        
+        # Offset by 10 pixels
+        offset_corners = [(x + 10, y + 10) for x, y in corners]
+        
+        # Add new box
+        self.obb_list.append((offset_corners, class_id))
+        
+        # Mark as modified
+        self.annotations_modified = True
+        
+        # Select the new box
+        self.selected_box_idx = len(self.obb_list) - 1
+        
+        # Update UI
+        self.redraw_all_boxes()
+        self.update_annotations_list()
+        self.update_info_display()
+        self.status_var.set(f"✓ Box duplicated! Total: {len(self.obb_list)}")
+    
     def copy_from_previous(self):
         """Copy annotations from the previous image and scale to current image size"""
 
-        # 1️⃣ Check bounds
         if self.current_image_idx <= 0:
             messagebox.showinfo("Info", "This is the first image. Nothing to copy.")
             return
 
         prev_image_path = self.image_files[self.current_image_idx - 1]
-        prev_label_path = Path(self.labels_folder) / f"{prev_image_path.stem}.txt"
-
-        if not prev_label_path.exists():
-            messagebox.showinfo("Info", "Previous image has no annotations.")
-            return
-
-        
-
-        # 3️⃣ Load previous image to get dimensions
         prev_img = cv2.imread(str(prev_image_path))
         if prev_img is None:
             messagebox.showerror("Error", "Failed to load previous image.")
             return
 
         prev_H, prev_W = prev_img.shape[:2]
+        stem = prev_image_path.stem
 
-        # 4️⃣ Clear current annotations
+        # 🔍 Find annotation file (main or categorized)
+        label_file = Path(self.labels_folder) / f"{stem}.txt"
+
+        if not label_file.exists():
+            categorized_dir = Path(self.labels_folder) / "categorized"
+            if categorized_dir.exists():
+                for category_folder in categorized_dir.iterdir():
+                    if category_folder.is_dir():
+                        candidate = category_folder / f"{stem}.txt"
+                        if candidate.exists():
+                            label_file = candidate
+                            break
+
+        if not label_file.exists():
+            messagebox.showinfo("Info", "Previous image has no annotations.")
+            return
+
+        # 🧹 Clear current annotations
         self.obb_list.clear()
         self.selected_box_idx = None
 
         try:
-            with open(prev_label_path, "r") as f:
+            with open(label_file, "r") as f:
                 for line in f:
                     parts = line.strip().split()
                     if len(parts) != 9:
@@ -485,7 +618,7 @@ class OBBAnnotator:
                     class_id = parts[0]
                     coords = list(map(float, parts[1:]))
 
-                    # 🔹 Step A: denormalize using PREVIOUS image
+                    # Denormalize using previous image size
                     prev_corners = [
                         (coords[0] * prev_W, coords[1] * prev_H),
                         (coords[2] * prev_W, coords[3] * prev_H),
@@ -493,34 +626,206 @@ class OBBAnnotator:
                         (coords[6] * prev_W, coords[7] * prev_H),
                     ]
 
-                    # 🔹 Step B: scale to CURRENT image
+                    # Scale to current image
                     sx = self.W / prev_W
                     sy = self.H / prev_H
-
                     curr_corners = [(x * sx, y * sy) for x, y in prev_corners]
 
                     self.obb_list.append((curr_corners, class_id))
 
-            # 5️⃣ Update UI
+            self.annotations_modified = True
+
             self.redraw_all_boxes()
             self.update_annotations_list()
             self.update_info_display()
-            self.status_var.set(f"✓ Copied {len(self.obb_list)} boxes from previous image") 
+            self.status_var.set(f"✓ Copied {len(self.obb_list)} boxes from previous image")
 
         except Exception as e:
             messagebox.showerror("Error", f"Copy failed:\n{e}")
 
 
+    def check_annotation_exists(self, stem):
+        """Check if annotation exists for given stem in main or any category folder"""
+        if not self.labels_folder:
+            return False
+        
+        # Check main labels folder
+        main_label = Path(self.labels_folder) / f"{stem}.txt"
+        if main_label.exists():
+            return True
+        
+        # Check categorized folders
+        categorized_dir = Path(self.labels_folder) / "categorized"
+        if categorized_dir.exists():
+            for category_folder in categorized_dir.iterdir():
+                if category_folder.is_dir():
+                    category_label = category_folder / f"{stem}.txt"
+                    if category_label.exists():
+                        return True
+        
+        return False
+    
+    def auto_save_to_original_location(self):
+        """Auto-save annotations back to their original source location"""
+        if not self.annotation_source_path:
+            return False
+        
+        try:
+            # Write annotations to the same file they were loaded from
+            ok, err = self._write_annotations_to_path(self.annotation_source_path)
+            if ok:
+                self.annotations_modified = False
+                self.status_var.set(f"✓ Auto-saved to {self.annotation_source_path.parent.name}")
+                return True
+            else:
+                self.status_var.set(f"Error auto-saving: {err}")
+                return False
+        except Exception as e:
+            self.status_var.set(f"Error auto-saving: {e}")
+            return False
+    
+    def check_if_saved_anywhere(self):
+        """Check if current image has annotations saved in main or any categorized folder"""
+        if not self.image_path:
+            return False
+        
+        stem = Path(self.image_path).stem
+        return self.check_annotation_exists(stem)
+    
+    def prompt_category_selection(self):
+        """Show modal dialog forcing user to select a category"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("⚠ Save Required")
+        dialog.configure(bg='#2b2b2b')
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Make dialog modal - user cannot dismiss it
+        dialog.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        # Warning message
+        tk.Label(dialog, text="⚠ Unsaved Annotations Detected", 
+                font=('Arial', 16, 'bold'), bg='#2b2b2b', fg='#ff6b6b', pady=20).pack()
+        
+        tk.Label(dialog, text="You must save annotations to a category before continuing.",
+                font=('Arial', 12), bg='#2b2b2b', fg='white', pady=10).pack()
+        
+        tk.Label(dialog, text=f"Current image: {Path(self.image_path).name}",
+                font=('Arial', 10), bg='#2b2b2b', fg='#888888', pady=5).pack()
+        
+        tk.Label(dialog, text=f"Annotations: {len(self.obb_list)} boxes",
+                font=('Arial', 10), bg='#2b2b2b', fg='#888888', pady=5).pack()
+        
+        # Category buttons
+        btn_frame = tk.Frame(dialog, bg='#2b2b2b')
+        btn_frame.pack(fill=tk.X, padx=30, pady=30)
+        
+        result = {'category': None}
+        
+        def select_category(cat):
+            result['category'] = cat
+            dialog.destroy()
+        
+        categories = [
+            ("➕ Add to garment", "garment", '#8e44ad'),
+            ("➕ Add to towel", "towel", '#f39c12'),
+            ("➕ Add to cap", "cap", '#3498db'),
+            ("➕ Add to bag", "bag", '#27ae60')
+        ]
+        
+        for text, cat, color in categories:
+            tk.Button(btn_frame, text=text, command=lambda c=cat: select_category(c),
+                     bg=color, fg='white', font=('Arial', 12, 'bold'),
+                     relief=tk.FLAT, pady=15, cursor='hand2').pack(fill=tk.X, pady=5)
+        
+        # Center dialog
+        dialog.update_idletasks()
+        dialog_width = 500
+        dialog_height = dialog.winfo_reqheight()
+        
+        x = self.root.winfo_x() + (self.root.winfo_width() - dialog_width) // 2
+        y = self.root.winfo_y() + (self.root.winfo_height() - dialog_height) // 2
+        
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        
+        # Wait for selection
+        self.root.wait_window(dialog)
+        
+        return result['category']
+    
+    def check_and_save_before_navigation(self):
+        """Check if annotations need to be saved before navigation"""
+        # If no annotations, just proceed
+        if not self.obb_list:
+            return True
+        
+        # If annotations not modified, proceed
+        if not self.annotations_modified:
+            return True
+        
+        # If annotations were loaded from a file and modified, auto-save back to that location
+        if self.annotation_source_path:
+            return self.auto_save_to_original_location()
+        
+        # If annotations are new (never saved before), prompt for category
+        if not self.check_if_saved_anywhere():
+            category = self.prompt_category_selection()
+            if category:
+                self.save_to_category(category)
+                self.annotations_modified = False
+                return True
+            else:
+                # User didn't select (shouldn't happen with modal dialog)
+                return False
+        
+        return True
         
     def prev_image(self):
         """Navigate to previous image"""
+        if not self.check_and_save_before_navigation():
+            return
+        
         if self.image_files and self.current_image_idx > 0:
             self.load_image(self.current_image_idx - 1)
         
     def next_image(self):
         """Navigate to next image"""
+        if not self.check_and_save_before_navigation():
+            return
+        
         if self.image_files and self.current_image_idx < len(self.image_files) - 1:
             self.load_image(self.current_image_idx + 1)
+    
+    def on_image_select(self, event):
+        """Handle image selection from list"""
+        if not self.check_and_save_before_navigation():
+            # Reset selection to current image
+            self.image_listbox.selection_clear(0, tk.END)
+            self.image_listbox.selection_set(self.current_image_idx)
+            return
+        
+        selection = self.image_listbox.curselection()
+        if selection:
+            # Get the actual index from the displayed name
+            selected_name = self.image_listbox.get(selection[0])[2:]  # Remove status symbol
+            for idx, img_file in enumerate(self.image_files):
+                if img_file.name == selected_name:
+                    self.load_image(idx)
+                    break
+    
+    def on_closing(self):
+        """Handle window close event"""
+        if self.obb_list and self.annotations_modified:
+            # If loaded from existing file, auto-save
+            if self.annotation_source_path:
+                self.auto_save_to_original_location()
+            # If new annotations, prompt for category
+            elif not self.check_if_saved_anywhere():
+                category = self.prompt_category_selection()
+                if category:
+                    self.save_to_category(category)
+        
+        self.root.destroy()
         
     def update_progress(self):
         """Update progress label"""
@@ -528,18 +833,16 @@ class OBBAnnotator:
             total = len(self.image_files)
             current = self.current_image_idx + 1
             
-            # Count annotated
+            # Count annotated (check both main and category folders)
             annotated = sum(1 for f in self.image_files 
-                          if (Path(self.labels_folder) / f"{f.stem}.txt").exists())
+                          if self.check_annotation_exists(f.stem))
             
             self.progress_label.config(
                 text=f"Image {current}/{total} | Annotated: {annotated}/{total} ({annotated*100//total}%)"
             )
             
             # Update session stats
-            total_boxes = sum(1 for f in self.image_files 
-                            if (Path(self.labels_folder) / f"{f.stem}.txt").exists())
-            self.stats_label.config(text=f"📊 Session: {annotated} images | ~{total_boxes}+ boxes")
+            self.stats_label.config(text=f"📊 Session: {annotated} images | ~{annotated}+ boxes")
         
     def display_image(self):
         if self.original_img is None:
@@ -584,46 +887,33 @@ class OBBAnnotator:
     
     def cancel_drawing(self):
         """Cancel current drawing operation"""
-        if self.mode == 'drawing' and self.drawing_points:
-            self.drawing_points.clear()
+        if self.mode == 'drawing_custom':
+            self.custom_box_start = None
             self.canvas.delete('temp')
-            self.canvas.delete('point_marker')
             self.mode = None
             self.status_var.set("Drawing cancelled")
+    
+    def create_preset_box(self, center_x, center_y, width, height):
+        """Create a preset-sized box centered at the given point"""
+        half_w = width / 2
+        half_h = height / 2
+        
+        corners = [
+            (center_x - half_w, center_y - half_h),  # Top-left
+            (center_x + half_w, center_y - half_h),  # Top-right
+            (center_x + half_w, center_y + half_h),  # Bottom-right
+            (center_x - half_w, center_y + half_h),  # Bottom-left
+        ]
+        
+        return corners
     
     def on_mouse_down(self, event):
         if self.original_img is None:
             return
         
-        # Check if we're in drawing mode (4-point mode)
-        if self.mode == 'drawing':
-            # Add point to drawing list
-            img_x, img_y = self.canvas_to_image(event.x, event.y)
-            self.drawing_points.append((img_x, img_y))
-            
-            # Draw point marker
-            self.canvas.create_oval(event.x-5, event.y-5, event.x+5, event.y+5,
-                                   fill='#00ff00', outline='white', width=2,
-                                   tags='point_marker')
-            
-            # Draw lines between points
-            if len(self.drawing_points) > 1:
-                canvas_points = [self.image_to_canvas(x, y) for x, y in self.drawing_points]
-                for i in range(len(canvas_points) - 1):
-                    x1, y1 = canvas_points[i]
-                    x2, y2 = canvas_points[i + 1]
-                    self.canvas.create_line(x1, y1, x2, y2, fill='#00ff00',
-                                           width=2, tags='temp')
-            
-            self.status_var.set(f"Point {len(self.drawing_points)}/4 marked")
-            
-            # If we have 4 points, complete the box
-            if len(self.drawing_points) == 4:
-                self.complete_box()
-            
-            return
+        img_x, img_y = self.canvas_to_image(event.x, event.y)
         
-        # Otherwise, check for existing interactions
+        # Check for existing interactions first
         clicked_box = self.get_box_at_point(event.x, event.y)
         clicked_handle = self.get_rotation_handle_at_point(event.x, event.y)
         clicked_edge = self.get_resize_edge_at_point(event.x, event.y)
@@ -648,65 +938,58 @@ class OBBAnnotator:
             self.highlight_box(self.selected_box_idx)
             self.status_var.set(f"📦 Moving box #{self.selected_box_idx + 1}")
         else:
-            # Start new box drawing
-            self.mode = 'drawing'
-            self.drawing_points = []
-            img_x, img_y = self.canvas_to_image(event.x, event.y)
-            self.drawing_points.append((img_x, img_y))
+            # Create new box based on mode
+            mode = self.box_creation_mode.get()
             
-            # Draw first point
-            self.canvas.create_oval(event.x-5, event.y-5, event.x+5, event.y+5,
-                                   fill='#00ff00', outline='white', width=2,
-                                   tags='point_marker')
-            
-            self.selected_box_idx = None
-            self.status_var.set("Point 1/4 marked - Click 3 more points")
-    
-    def complete_box(self):
-        """Complete the 4-point box"""
-        if len(self.drawing_points) != 4:
-            return
-        
-        # Check if area is large enough
-        corners = self.drawing_points
-        xs = [x for x, y in corners]
-        ys = [y for x, y in corners]
-        width = max(xs) - min(xs)
-        height = max(ys) - min(ys)
-        
-        if width * height < MIN_AREA:
-            self.status_var.set(f"⚠ Box too small (min {MIN_AREA}px²)")
-            self.drawing_points.clear()
-            self.canvas.delete('temp')
-            self.canvas.delete('point_marker')
-            self.mode = None
-            return
-        
-        # Show class selection dialog
-        result = self.show_class_selection_dialog()
-        
-        if result['confirmed']:
-            self.obb_list.append((self.drawing_points.copy(), result['class_id']))
-            self.redraw_all_boxes()
-            self.update_annotations_list()
-            class_name = CLASS_LABELS.get(result['class_id'], result['class_id'])
-            self.status_var.set(f"✓ Box #{len(self.obb_list)} created ({class_name})! Total: {len(self.obb_list)}")
-        else:
-            self.status_var.set("Box creation cancelled")
-        
-        # Clean up
-        self.drawing_points.clear()
-        self.canvas.delete('temp')
-        self.canvas.delete('point_marker')
-        self.mode = None
+            if mode == "custom":
+                # Start custom box drawing
+                self.mode = 'drawing_custom'
+                self.custom_box_start = (img_x, img_y)
+                self.selected_box_idx = None
+                self.status_var.set("Click and drag to create custom box")
+            else:
+                # Create preset box
+                if mode == "99x66":
+                    width, height = 99, 66
+                elif mode == "66x66":
+                    width, height = 66, 66
+                elif mode == "300x200":
+                    width, height = 300, 200
+                else:
+                    return
+                
+                # Create box centered at click
+                corners = self.create_preset_box(img_x, img_y, width, height)
+                
+                # Show class selection dialog
+                result = self.show_class_selection_dialog()
+                
+                if result['confirmed']:
+                    self.obb_list.append((corners, result['class_id']))
+                    self.annotations_modified = True
+                    self.redraw_all_boxes()
+                    self.update_annotations_list()
+                    class_name = CLASS_LABELS.get(result['class_id'], result['class_id'])
+                    self.status_var.set(f"✓ Box #{len(self.obb_list)} created ({class_name})! Total: {len(self.obb_list)}")
+                else:
+                    self.status_var.set("Box creation cancelled")
     
     def on_mouse_drag(self, event):
         # Update coordinates display
         img_x, img_y = self.canvas_to_image(event.x, event.y)
         self.coords_var.set(f"X: {int(img_x)} Y: {int(img_y)}")
         
-        # Don't handle drag in drawing mode
-        if self.mode == 'drawing':
+        if self.mode == 'drawing_custom' and self.custom_box_start:
+            # Draw preview rectangle
+            self.canvas.delete('temp')
+            
+            start_x, start_y = self.custom_box_start
+            canvas_start = self.image_to_canvas(start_x, start_y)
+            
+            self.canvas.create_rectangle(
+                canvas_start[0], canvas_start[1], event.x, event.y,
+                outline='#00ff00', width=2, tags='temp'
+            )
             return
             
         if self.mode == 'moving' and self.selected_box_idx is not None:
@@ -719,34 +1002,54 @@ class OBBAnnotator:
             new_corners = [(x + dx_img, y + dy_img) for x, y in corners]
             self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             
+            self.annotations_modified = True
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
             
         elif self.mode == 'resizing' and self.selected_box_idx is not None:
-            # Resize the edge
+            # Resize while maintaining aspect ratio
             corners, class_id = self.obb_list[self.selected_box_idx]
             
-            # Get mouse movement in image coordinates
+            # Calculate center of the box
+            cx = sum(x for x, y in corners) / 4
+            cy = sum(y for x, y in corners) / 4
+            
+            # Get current mouse position in image coordinates
             curr_x, curr_y = self.canvas_to_image(event.x, event.y)
-            old_x, old_y = self.canvas_to_image(self.drag_start[0], self.drag_start[1])
-            dx = curr_x - old_x
-            dy = curr_y - old_y
             
-            # Move the two corners of the selected edge
-            edge_idx = self.resize_edge
-            new_corners = list(corners)
+            # Calculate vector from center to mouse
+            dx_from_center = curr_x - cx
+            dy_from_center = curr_y - cy
             
-            # Calculate which corners to move based on edge index
-            corner1_idx = edge_idx
-            corner2_idx = (edge_idx + 1) % 4
+            # Calculate current distance from center (diagonal)
+            current_dist = math.sqrt(dx_from_center**2 + dy_from_center**2)
             
-            # Move both corners of this edge
-            new_corners[corner1_idx] = (corners[corner1_idx][0] + dx, corners[corner1_idx][1] + dy)
-            new_corners[corner2_idx] = (corners[corner2_idx][0] + dx, corners[corner2_idx][1] + dy)
+            # Calculate original distance from center to any corner
+            orig_dx = corners[0][0] - cx
+            orig_dy = corners[0][1] - cy
+            orig_dist = math.sqrt(orig_dx**2 + orig_dy**2)
+            
+            # Calculate scale factor
+            if orig_dist > 0:
+                scale_factor = current_dist / orig_dist
+            else:
+                scale_factor = 1.0
+            
+            # Apply scale to all corners while maintaining aspect ratio
+            new_corners = []
+            for x, y in corners:
+                # Vector from center to corner
+                vx = x - cx
+                vy = y - cy
+                # Scale the vector
+                new_x = cx + vx * scale_factor
+                new_y = cy + vy * scale_factor
+                new_corners.append((new_x, new_y))
             
             self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             self.drag_start = (event.x, event.y)
             
+            self.annotations_modified = True
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
             
@@ -776,12 +1079,58 @@ class OBBAnnotator:
             self.obb_list[self.selected_box_idx] = (new_corners, class_id)
             self.drag_start = (event.x, event.y)
             
+            self.annotations_modified = True
             self.redraw_box(self.selected_box_idx)
             self.update_info_display()
     
     def on_mouse_up(self, event):
-        # Don't handle mouse up in drawing mode
-        if self.mode == 'drawing':
+        if self.mode == 'drawing_custom' and self.custom_box_start:
+            # Complete custom box
+            img_x, img_y = self.canvas_to_image(event.x, event.y)
+            start_x, start_y = self.custom_box_start
+            
+            # Calculate box dimensions
+            min_x = min(start_x, img_x)
+            max_x = max(start_x, img_x)
+            min_y = min(start_y, img_y)
+            max_y = max(start_y, img_y)
+            
+            width = max_x - min_x
+            height = max_y - min_y
+            
+            # Check minimum area
+            if width * height < MIN_AREA:
+                self.status_var.set(f"⚠ Box too small (min {MIN_AREA}px²)")
+                self.canvas.delete('temp')
+                self.custom_box_start = None
+                self.mode = None
+                return
+            
+            # Create corners (axis-aligned)
+            corners = [
+                (min_x, min_y),  # Top-left
+                (max_x, min_y),  # Top-right
+                (max_x, max_y),  # Bottom-right
+                (min_x, max_y),  # Bottom-left
+            ]
+            
+            # Show class selection dialog
+            result = self.show_class_selection_dialog()
+            
+            if result['confirmed']:
+                self.obb_list.append((corners, result['class_id']))
+                self.annotations_modified = True
+                self.redraw_all_boxes()
+                self.update_annotations_list()
+                class_name = CLASS_LABELS.get(result['class_id'], result['class_id'])
+                self.status_var.set(f"✓ Box #{len(self.obb_list)} created ({class_name})! Total: {len(self.obb_list)}")
+            else:
+                self.status_var.set("Box creation cancelled")
+            
+            # Clean up
+            self.canvas.delete('temp')
+            self.custom_box_start = None
+            self.mode = None
             return
             
         if self.mode in ['moving', 'rotating', 'resizing']:
@@ -946,8 +1295,8 @@ class OBBAnnotator:
         
         # Show current image info with annotation status
         img_name = Path(self.image_path).name
-        label_file = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
-        status_icon = "✓" if label_file.exists() else "○"
+        stem = Path(self.image_path).stem
+        status_icon = "✓" if self.check_annotation_exists(stem) else "○"
         
         header = f"📄 {img_name} {status_icon}\n{'═' * 35}\n\n"
         
@@ -1001,6 +1350,7 @@ class OBBAnnotator:
         if 0 <= idx < len(self.obb_list):
             self.obb_list.pop(idx)
             self.selected_box_idx = None
+            self.annotations_modified = True
             self.redraw_all_boxes()
             self.update_annotations_list()
             self.update_info_display()
@@ -1010,6 +1360,7 @@ class OBBAnnotator:
         if self.obb_list:
             self.obb_list.pop()
             self.selected_box_idx = None
+            self.annotations_modified = True
             self.redraw_all_boxes()
             self.update_annotations_list()
             self.update_info_display()
@@ -1022,6 +1373,9 @@ class OBBAnnotator:
             if messagebox.askyesno("Confirm", f"Delete all {len(self.obb_list)} boxes?"):
                 self.obb_list.clear()
                 self.selected_box_idx = None
+                self.annotations_modified = True
+                if self.annotation_source_path:
+                    self.auto_save_to_original_location()
                 self.redraw_all_boxes()
                 self.update_annotations_list()
                 self.update_info_display()
@@ -1029,41 +1383,6 @@ class OBBAnnotator:
         else:
             self.status_var.set("No boxes to clear")
     
-    def save_annotations(self, silent=False):
-        if not self.obb_list:
-            if not silent:
-                self.status_var.set("⚠ No annotations to save")
-            return
-        
-        if not self.image_path or not self.labels_folder:
-            if not silent:
-                messagebox.showerror("Error", "No image or labels folder!")
-            return
-        
-        # Create labels folder if needed
-        Path(self.labels_folder).mkdir(parents=True, exist_ok=True)
-        
-        out_txt = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
-        
-        try:
-            with open(out_txt, "w") as f:
-                for corners, class_id in self.obb_list:
-                    norm_corners = [(x/self.W, y/self.H) for x, y in corners]
-                    line = class_id
-                    for x, y in norm_corners:
-                        line += f" {x:.6f} {y:.6f}"
-                    f.write(line + "\n")
-             
-            
-            self.status_var.set(f"💾 Saved {len(self.obb_list)} annotations → {out_txt.name}")
-            
-            # Update image list status
-            self.filter_image_list()
-            self.update_progress()
-            
-        except Exception as e:
-            if not silent:
-                messagebox.showerror("Error", f"Failed to save: {str(e)}")
     def _ensure_dir(self, path: Path):
         """Create directory if it doesn't exist (Path object)."""
         path.mkdir(parents=True, exist_ok=True)
@@ -1135,8 +1454,14 @@ class OBBAnnotator:
             else:
                 img_msg = "Image file not found to copy."
 
-            # 3) Success status
-            self.status_var.set(f"✓ Saved to {category_name}: image: {src_image.name} | annotation: {ann_copied}") 
+            # 3) Clear modified flag and update source path
+            self.annotations_modified = False
+            
+            # Update source path so future modifications auto-save to this location
+            self.annotation_source_path = dest_ann_dir / f"{src_image.stem}.txt"
+
+            # 4) Success status
+            self.status_var.set(f"✓ Saved to {category_name}: {src_image.name}") 
 
         except Exception as e:
             self.status_var.set(f"Error saving to {category_name}: {e}")
@@ -1179,9 +1504,8 @@ class OBBAnnotator:
         # Populate listbox
         self.image_listbox.delete(0, tk.END)
         for img_file in self.image_files:
-            # Check if already annotated
-            label_file = Path(self.labels_folder) / f"{img_file.stem}.txt"
-            status = "✅" if label_file.exists() else "○"
+            # Check if already annotated (check both main and category folders)
+            status = "✅" if self.check_annotation_exists(img_file.stem) else "○"
             self.image_listbox.insert(tk.END, f"{status} {img_file.name}")
         
         self.current_image_idx = 0
@@ -1196,29 +1520,14 @@ class OBBAnnotator:
         
         for idx, img_file in enumerate(self.image_files):
             if search_term in img_file.name.lower():
-                label_file = Path(self.labels_folder) / f"{img_file.stem}.txt"
-                status = "✓" if label_file.exists() else "○"
+                # Check if already annotated (check both main and category folders)
+                status = "✓" if self.check_annotation_exists(img_file.stem) else "○"
                 self.image_listbox.insert(tk.END, f"{status} {img_file.name}")
-        
-    def on_image_select(self, event):
-        """Handle image selection from list"""
-        selection = self.image_listbox.curselection()
-        if selection:
-            # Get the actual index from the displayed name
-            selected_name = self.image_listbox.get(selection[0])[2:]  # Remove status symbol
-            for idx, img_file in enumerate(self.image_files):
-                if img_file.name == selected_name:
-                    self.load_image(idx)
-                    break
         
     def load_image(self, idx):
         """Load image at given index"""
         if idx < 0 or idx >= len(self.image_files):
             return
-        
-        # Auto-save current annotations
-        if self.auto_save.get() and self.obb_list and self.image_path:
-            self.save_annotations(silent=True)
         
         self.current_image_idx = idx
         self.image_path = str(self.image_files[idx])
@@ -1246,14 +1555,30 @@ class OBBAnnotator:
         self.image_listbox.see(idx)
         
     def load_existing_annotations(self):
-        """Auto-load existing annotations for current image (no prompts)"""
+        """Auto-load existing annotations for current image (check main and category folders)"""
         self.obb_list.clear()
         self.selected_box_idx = None
+        self.annotations_modified = False
+        self.annotation_source_path = None  # Reset source path
 
         if not self.labels_folder:
             return
 
-        label_file = Path(self.labels_folder) / f"{Path(self.image_path).stem}.txt"
+        stem = Path(self.image_path).stem
+        
+        # Try main labels folder first
+        label_file = Path(self.labels_folder) / f"{stem}.txt"
+        
+        # If not in main folder, check categorized folders
+        if not label_file.exists():
+            categorized_dir = Path(self.labels_folder) / "categorized"
+            if categorized_dir.exists():
+                for category_folder in categorized_dir.iterdir():
+                    if category_folder.is_dir():
+                        category_label = category_folder / f"{stem}.txt"
+                        if category_label.exists():
+                            label_file = category_label
+                            break
 
         if not label_file.exists():
             return
@@ -1276,6 +1601,9 @@ class OBBAnnotator:
 
                         self.obb_list.append((corners, class_id))
 
+            # Store the source path for auto-save later
+            self.annotation_source_path = label_file
+            
             self.status_var.set(f"Loaded {len(self.obb_list)} existing annotations")
 
         except Exception as e:
