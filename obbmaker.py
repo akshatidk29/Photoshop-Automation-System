@@ -56,8 +56,8 @@ CLASS_LABELS = {
 }
 
 MIN_AREA = 200             # ignore tiny boxes
-IMAGES_FOLDER = "Data_/Images"      # <-- SET YOUR IMAGES FOLDER
-LABELS_FOLDER = "Data_/Annotations"      # <-- SET YOUR LABELS FOLDER
+IMAGES_FOLDER = "Data_1"      # <-- SET YOUR IMAGES FOLDER
+LABELS_FOLDER = "Annotations"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
 
 class OBBAnnotator:
