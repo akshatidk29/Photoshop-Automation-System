@@ -168,7 +168,7 @@ class OBBAnnotator:
                       font=('Arial', 10), activebackground='#2d2d2d').pack(side=tk.RIGHT, padx=20)
         
     def create_left_sidebar(self, parent):
-        left_frame = tk.Frame(parent, width=280, bg='#252525')
+        left_frame = tk.Frame(parent, width=320, bg='#252525')
         left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 5))
         left_frame.pack_propagate(False)
         
@@ -348,7 +348,12 @@ class OBBAnnotator:
         self.stats_label = tk.Label(stats_frame, text="📊 Session: 0 images | 0 boxes", 
                                     bg='#252525', fg='#888888', font=('Arial', 9))
         self.stats_label.pack()
-        
+    def format_image_list_item(self, img_name, max_len=38):
+        """Ensure status icon is always visible by truncating long names"""
+        if len(img_name) > max_len:
+            return img_name[:max_len - 3] + "..."
+        return img_name
+
     def create_status_bar(self):
         status_frame = tk.Frame(self.root, bg='#2d2d2d', height=30)
         status_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -798,6 +803,10 @@ class OBBAnnotator:
     
     def on_image_select(self, event):
         """Handle image selection from list"""
+        if self.image_listbox.curselection():
+            # Store current selection index before navigation check
+            temp_selection_idx = self.image_listbox.curselection()[0]
+        
         if not self.check_and_save_before_navigation():
             # Reset selection to current image
             self.image_listbox.selection_clear(0, tk.END)
@@ -1174,17 +1183,18 @@ class OBBAnnotator:
         return None
     
     def get_rotation_handle_at_point(self, cx, cy):
+        ROTATE_DETECT_RADIUS = 5
         for idx, (corners, class_id) in enumerate(self.obb_list):
             for corner_x, corner_y in corners:
                 handle_cx, handle_cy = self.image_to_canvas(corner_x, corner_y)
                 dist = math.sqrt((cx - handle_cx)**2 + (cy - handle_cy)**2)
-                if dist < 8:
+                if dist < ROTATE_DETECT_RADIUS:
                     return idx
         return None
     
     def get_resize_edge_at_point(self, cx, cy):
         """Check if point is near an edge of any box. Returns (box_idx, edge_idx)"""
-        threshold = 8  # Distance threshold for edge detection
+        threshold = 4  # Distance threshold for edge detection
         
         for idx, (corners, class_id) in enumerate(self.obb_list):
             canvas_corners = [self.image_to_canvas(x, y) for x, y in corners]
@@ -1264,13 +1274,13 @@ class OBBAnnotator:
             points.extend([x, y])
         
         color = '#00ffff' if selected else '#ff0000'
-        width = 3 if selected else 2
+        width = 2 if selected else 1
         self.canvas.create_polygon(points, outline=color, fill='', width=width,
                                    tags=('box', f'box_{idx}'))
-        
+        HANDLE_RADIUS = 2
         for x, y in canvas_corners:
             handle_color = '#ffff00' if selected else '#ff8800'
-            self.canvas.create_oval(x-6, y-6, x+6, y+6, fill=handle_color,
+            self.canvas.create_oval(x-HANDLE_RADIUS, y-HANDLE_RADIUS, x+HANDLE_RADIUS, y+HANDLE_RADIUS, fill=handle_color,
                                    outline='black', width=2, tags=('handle', f'handle_{idx}'))
         
         cx = sum(x for x, y in canvas_corners) / 4
@@ -1460,8 +1470,18 @@ class OBBAnnotator:
             # Update source path so future modifications auto-save to this location
             self.annotation_source_path = dest_ann_dir / f"{src_image.stem}.txt"
 
-            # 4) Success status
-            self.status_var.set(f"✓ Saved to {category_name}: {src_image.name}") 
+            # 4) Update the listbox to show checkmark immediately
+            self.image_listbox.delete(self.current_image_idx)
+            status = "✓"
+            display_name = self.format_image_list_item(src_image.name)
+            self.image_listbox.insert(self.current_image_idx, f"✓ {display_name}")
+            self.image_listbox.config(xscrollcommand=None)
+            self.image_listbox.selection_set(self.current_image_idx)
+            
+            # Update progress display
+            self.update_progress()
+            
+            self.status_var.set(f"✓ Saved to {category_name}: {src_image.name}")
 
         except Exception as e:
             self.status_var.set(f"Error saving to {category_name}: {e}")
@@ -1495,7 +1515,8 @@ class OBBAnnotator:
             found_files.update(Path(self.images_folder).rglob(f"*{ext}"))
             found_files.update(Path(self.images_folder).rglob(f"*{ext.upper()}"))
         
-        self.image_files = sorted(list(found_files))
+        # Sort by path to maintain directory structure, not by annotation status
+        self.image_files = sorted(list(found_files), key=lambda p: str(p))
         
         if not self.image_files:
             messagebox.showwarning("No Images", "No images found in the selected folder and its subdirectories!")
@@ -1505,8 +1526,12 @@ class OBBAnnotator:
         self.image_listbox.delete(0, tk.END)
         for img_file in self.image_files:
             # Check if already annotated (check both main and category folders)
-            status = "✅" if self.check_annotation_exists(img_file.stem) else "○"
-            self.image_listbox.insert(tk.END, f"{status} {img_file.name}")
+            status = "✓" if self.check_annotation_exists(img_file.stem) else "○"
+            display_name = self.format_image_list_item(img_file.name)
+            self.image_listbox.insert(tk.END, f"{status} {display_name}")
+            self.image_listbox.config(xscrollcommand=None)
+
+
         
         self.current_image_idx = 0
         self.load_image(0)
@@ -1522,7 +1547,11 @@ class OBBAnnotator:
             if search_term in img_file.name.lower():
                 # Check if already annotated (check both main and category folders)
                 status = "✓" if self.check_annotation_exists(img_file.stem) else "○"
-                self.image_listbox.insert(tk.END, f"{status} {img_file.name}")
+                display_name = self.format_image_list_item(img_file.name)
+                self.image_listbox.insert(tk.END, f"{status} {display_name}")
+                self.image_listbox.config(xscrollcommand=None)
+
+
         
     def load_image(self, idx):
         """Load image at given index"""

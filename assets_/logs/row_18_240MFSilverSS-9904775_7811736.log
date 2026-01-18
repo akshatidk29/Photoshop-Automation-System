@@ -1,0 +1,11 @@
+Optimization Log for Row 18: 240MFSilverSS-9904775_7811736
+==================================================
+[16:34:23] [INFO] Processing row 18: 240MFSilverSS-9904775_7811736
+[16:34:23] [INFO] Config: 240M, Silver, LEFT CHEST, 9904775_7811736
+[16:34:23] [INFO] Found 2 image candidates: ['240M Silver.jpg', '240M Silver Back.jpg']
+[16:34:23] [INFO] Found logo: 9904775_7811736.pdf
+[16:34:23] [INFO] Detected Type: T-SHIRT
+[16:34:23] [INFO] Single Position: LEFT-CHEST
+[16:34:23] [INFO] Trying image: 240M Silver.jpg
+[16:34:23] [INFO]   Coords for LEFT-CHEST: (816, 684), Rotation: -6.5°
+[16:34:28] [SUCCESS] Added to batch (Combo=False)

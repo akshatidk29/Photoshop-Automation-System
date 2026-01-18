@@ -1,0 +1,11 @@
+Optimization Log for Row 16: 11150FWine-9904775_7811730
+==================================================
+[19:41:20] [INFO] Processing row 16: 11150FWine-9904775_7811730
+[19:41:20] [INFO] Config: 11150, Wine, RIGHT THIGH HIGH, 9904775_7811730
+[19:41:20] [INFO] Found 1 image candidates: ['11150-Wine-WineModelFront-1200W.jpg']
+[19:41:20] [INFO] Found logo: 9904775_7811730.pdf
+[19:41:20] [INFO] Detected Type: T-SHIRT
+[19:41:20] [INFO] Single Position: RIGHT-THIGH-HIGH
+[19:41:20] [INFO] Trying image: 11150-Wine-WineModelFront-1200W.jpg
+[19:41:20] [INFO]   Coords for RIGHT-THIGH-HIGH: (597, 246), Rotation: 10.9°
+[19:41:26] [SUCCESS] Added to batch (Combo=False)

@@ -202,6 +202,94 @@ def getGarmentRotationAngle(imagePath, locationName):
 
 
 # ============================================
+# OBB Clipping Functions (for clean logo placement)
+# ============================================
+
+def getOBBBoxPoints(imagePath, locationName):
+    """
+    Get the 4 corner points of the OBB for a specific location.
+    
+    Args:
+        imagePath: Path to the garment image.
+        locationName: Location name (e.g., "LEFT-BICEP").
+        
+    Returns:
+        4x2 numpy array of corner points, or None if not found.
+    """
+    try:
+        from model.inference.obb_garment_detector import getOBBBoxPoints as _getOBBBoxPoints
+        obb_name = _get_obb_class_name(locationName)
+        return _getOBBBoxPoints(imagePath, obb_name)
+    except Exception as e:
+        print(f"[getOBBBoxPoints] Error: {e}")
+        return None
+
+
+def getOBBRegionSize(imagePath, locationName):
+    """
+    Get the width and height of the OBB for a specific location.
+    
+    Args:
+        imagePath: Path to the garment image.
+        locationName: Location name.
+        
+    Returns:
+        (width, height) tuple, or None if not found.
+    """
+    try:
+        from model.inference.obb_garment_detector import getOBBRegionSize as _getOBBRegionSize
+        obb_name = _get_obb_class_name(locationName)
+        return _getOBBRegionSize(imagePath, obb_name)
+    except Exception as e:
+        print(f"[getOBBRegionSize] Error: {e}")
+        return None
+
+
+def createClippedLogo(imagePath, logoPath, locationName, rotation=None, scaleFactor=0.8):
+    """
+    Create a logo image clipped/masked to the OBB region bounds.
+    
+    The logo is rotated, scaled to fit the OBB, and masked so only
+    pixels within the OBB polygon are visible. Returns path to temp file.
+    
+    Args:
+        imagePath: Path to the garment image.
+        logoPath: Path to the logo image.
+        locationName: Location name (e.g., "LEFT-BICEP").
+        rotation: Optional rotation angle. If None, uses OBB angle.
+        scaleFactor: How much of OBB width to fill (0.8 = 80%).
+        
+    Returns:
+        Path to clipped logo temp file, or None if failed.
+    """
+    try:
+        from model.inference.obb_garment_detector import createClippedLogo as _createClippedLogo
+        obb_name = _get_obb_class_name(locationName)
+        return _createClippedLogo(imagePath, logoPath, obb_name, rotation, scaleFactor)
+    except Exception as e:
+        print(f"[createClippedLogo] Error: {e}")
+        return None
+
+
+def parseClippedLogoOffset(clippedLogoPath):
+    """
+    Parse the placement offset from a clipped logo filename.
+    
+    Args:
+        clippedLogoPath: Path to clipped logo file.
+        
+    Returns:
+        (offset_x, offset_y) tuple for positioning in image coordinates.
+    """
+    try:
+        from model.inference.obb_garment_detector import parseClippedLogoOffset as _parseOffset
+        return _parseOffset(clippedLogoPath)
+    except Exception as e:
+        print(f"[parseClippedLogoOffset] Error: {e}")
+        return (0, 0)
+
+
+# ============================================
 # Testing
 # ============================================
 

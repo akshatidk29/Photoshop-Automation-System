@@ -1,0 +1,13 @@
+Optimization Log for Row 17: 240MFSilverSS-9904775_7811731
+==================================================
+[16:34:19] [INFO] Processing row 17: 240MFSilverSS-9904775_7811731
+[16:34:19] [INFO] Config: 240M, Silver, BACK YOKE, 9904775_7811731
+[16:34:19] [INFO] Found 2 image candidates: ['240M Silver.jpg', '240M Silver Back.jpg']
+[16:34:19] [INFO] Found logo: 9904775_7811731.pdf
+[16:34:19] [INFO] Detected Type: T-SHIRT
+[16:34:19] [INFO] Single Position: BACK-YOKE
+[16:34:19] [INFO] Trying image: 240M Silver.jpg
+[16:34:19] [INFO]   Coords for BACK-YOKE: None, Rotation: 0.0°
+[16:34:19] [INFO] Trying image: 240M Silver Back.jpg
+[16:34:19] [INFO]   Coords for BACK-YOKE: (589, 473), Rotation: 1.5°
+[16:34:23] [SUCCESS] Added to batch (Combo=False)

@@ -1,0 +1,11 @@
+Optimization Log for Row 8: 4993KLFMidnightNavy-9904775_7811730
+==================================================
+[16:33:44] [INFO] Processing row 8: 4993KLFMidnightNavy-9904775_7811730
+[16:33:44] [INFO] Config: 4993KL, Midnight Navy, RIGHT COLLAR, 9904775_7811730
+[16:33:44] [INFO] Found 6 image candidates: ['4993KL Midnight Navy.jpg', '4993KL White.jpg', '4993KL Anthracite.jpg', '4993KL Varsity Red.jpg', '4993KL Black.jpg', '4993KL Blue Sapphire.jpg']
+[16:33:44] [INFO] Found logo: 9904775_7811730.pdf
+[16:33:44] [INFO] Detected Type: T-SHIRT
+[16:33:45] [INFO] Single Position: RIGHT-COLLAR
+[16:33:45] [INFO] Trying image: 4993KL Midnight Navy.jpg
+[16:33:45] [INFO]   Coords for RIGHT-COLLAR: (492, 478), Rotation: -60.9°
+[16:33:49] [SUCCESS] Added to batch (Combo=False)

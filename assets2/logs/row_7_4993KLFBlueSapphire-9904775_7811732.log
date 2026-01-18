@@ -1,0 +1,11 @@
+Optimization Log for Row 7: 4993KLFBlueSapphire-9904775_7811732
+==================================================
+[19:40:43] [INFO] Processing row 7: 4993KLFBlueSapphire-9904775_7811732
+[19:40:43] [INFO] Config: 4993KL, Blue Sapphire, LEFT COLLAR, 9904775_7811732
+[19:40:43] [INFO] Found 6 image candidates: ['4993KL Blue Sapphire.jpg', '4993KL Varsity Red.jpg', '4993KL White.jpg', '4993KL Black.jpg', '4993KL Anthracite.jpg', '4993KL Midnight Navy.jpg']
+[19:40:43] [INFO] Found logo: 9904775_7811732.pdf
+[19:40:43] [INFO] Detected Type: T-SHIRT
+[19:40:43] [INFO] Single Position: LEFT-COLLAR
+[19:40:43] [INFO] Trying image: 4993KL Blue Sapphire.jpg
+[19:40:43] [INFO]   Coords for LEFT-COLLAR: (749, 503), Rotation: -77.1°
+[19:40:48] [SUCCESS] Added to batch (Combo=False)

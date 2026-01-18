@@ -1,0 +1,13 @@
+Optimization Log for Row 3: 4993KLFAnthracite-9904775_7811732
+==================================================
+[19:40:20] [INFO] Processing row 3: 4993KLFAnthracite-9904775_7811732
+[19:40:20] [INFO] Config: 4993KL, Anthracite, LEFT BICEP RIGHT BICEP RIGHT CHEST, 9904775_7811732
+[19:40:20] [INFO] Found 6 image candidates: ['4993KL Anthracite.jpg', '4993KL Varsity Red.jpg', '4993KL White.jpg', '4993KL Blue Sapphire.jpg', '4993KL Black.jpg', '4993KL Midnight Navy.jpg']
+[19:40:20] [INFO] Found logo: 9904775_7811732.pdf
+[19:40:20] [INFO] Detected Type: T-SHIRT
+[19:40:20] [INFO] Combo Position Detected: ['LEFT-BICEP', 'RIGHT-BICEP', 'RIGHT-CHEST']
+[19:40:20] [INFO] Trying image: 4993KL Anthracite.jpg
+[19:40:20] [INFO]   Coords for LEFT-BICEP: (958, 779), Rotation: 23.0°
+[19:40:20] [INFO]   Coords for RIGHT-BICEP: (226, 771), Rotation: -31.9°
+[19:40:20] [INFO]   Coords for RIGHT-CHEST: (421, 680), Rotation: 2.1°
+[19:40:28] [SUCCESS] Added to batch (Combo=True)

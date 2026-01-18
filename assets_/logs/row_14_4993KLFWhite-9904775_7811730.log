@@ -1,0 +1,11 @@
+Optimization Log for Row 14: 4993KLFWhite-9904775_7811730
+==================================================
+[16:34:10] [INFO] Processing row 14: 4993KLFWhite-9904775_7811730
+[16:34:10] [INFO] Config: 4993KL, White, RIGHT SLEEVE, 9904775_7811730
+[16:34:10] [INFO] Found 6 image candidates: ['4993KL White.jpg', '4993KL Anthracite.jpg', '4993KL Varsity Red.jpg', '4993KL Blue Sapphire.jpg', '4993KL Midnight Navy.jpg', '4993KL Black.jpg']
+[16:34:10] [INFO] Found logo: 9904775_7811730.pdf
+[16:34:10] [INFO] Detected Type: T-SHIRT
+[16:34:10] [INFO] Single Position: RIGHT-SLEEVE
+[16:34:10] [INFO] Trying image: 4993KL White.jpg
+[16:34:10] [INFO]   Coords for RIGHT-SLEEVE: (204, 818), Rotation: 0.8°
+[16:34:14] [SUCCESS] Added to batch (Combo=False)
