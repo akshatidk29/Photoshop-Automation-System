@@ -59,7 +59,6 @@ MIN_AREA = 200             # ignore tiny boxes
 IMAGES_FOLDER = "Data_1"      # <-- SET YOUR IMAGES FOLDER
 LABELS_FOLDER = "Annotations"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
-
 class OBBAnnotator:
     def __init__(self, root):
         self.root = root
@@ -106,6 +105,8 @@ class OBBAnnotator:
         
         # Box creation mode
         self.box_creation_mode = tk.StringVar(value="99x66")
+        self.base_scale = 1.0   # fit-to-canvas scale
+        self.zoom_factor = 1.0 # user zoom (1.0 = no zoom)
         
         # Custom box drawing state
         self.custom_box_start = None
@@ -223,33 +224,77 @@ class OBBAnnotator:
     def create_canvas_area(self, parent):
         center_frame = tk.Frame(parent, bg='#1a1a1a')
         center_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Image info bar
+
+        # ─── Image info bar ─────────────────────────────────────────────
         info_bar = tk.Frame(center_frame, bg='#2d2d2d', height=40)
         info_bar.pack(fill=tk.X, pady=(0, 5))
-        
-        self.image_info_label = tk.Label(info_bar, text="No image loaded", 
-                                         bg='#2d2d2d', fg='white', font=('Arial', 11, 'bold'))
+
+        self.image_info_label = tk.Label(
+            info_bar,
+            text="No image loaded",
+            bg='#2d2d2d',
+            fg='white',
+            font=('Arial', 11, 'bold')
+        )
         self.image_info_label.pack(side=tk.LEFT, padx=15, pady=8)
-        
+
+        # ─── Canvas + Scrollbars container ──────────────────────────────
+        canvas_frame = tk.Frame(center_frame, bg='#1a1a1a')
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Scrollbars
+        self.v_scroll = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL)
+        self.h_scroll = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL)
+
         # Canvas
-        self.canvas = tk.Canvas(center_frame, bg='#2d2d2d', highlightthickness=0, cursor='crosshair')
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-        
-        # Bind mouse events
+        self.canvas = tk.Canvas(
+            canvas_frame,
+            bg='#2d2d2d',
+            highlightthickness=0,
+            cursor='crosshair',
+            yscrollcommand=self.v_scroll.set,
+            xscrollcommand=self.h_scroll.set
+        )
+
+        # Attach scrollbars to canvas
+        self.v_scroll.config(command=self.canvas.yview)
+        self.h_scroll.config(command=self.canvas.xview)
+
+        # Layout
+        self.v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # ─── Mouse bindings ─────────────────────────────────────────────
         self.canvas.bind("<ButtonPress-1>", self.on_mouse_down)
         self.canvas.bind("<B1-Motion>", self.on_mouse_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_mouse_up)
         self.canvas.bind("<Motion>", self.on_mouse_move)
         self.canvas.bind("<Double-Button-1>", self.on_double_click)
-        
-        # Help overlay
+
+        # Scroll / Zoom
+        self.canvas.bind("<MouseWheel>", self.on_zoom)   # Windows
+        self.canvas.bind("<Button-4>", self.on_zoom)     # Linux scroll up
+        self.canvas.bind("<Button-5>", self.on_zoom)     # Linux scroll down
+
+        # ─── Help overlay ───────────────────────────────────────────────
         help_frame = tk.Frame(center_frame, bg='#1a1a1a')
         help_frame.pack(fill=tk.X, pady=(5, 0))
-        
-        help_text = "💡 Click to create box (preset) | Click+Drag (custom mode) | Click+Drag: Move | Drag edges: Resize | Drag corners: Rotate | Double-click: Delete | ESC: Cancel | ⬅➡: Navigate"
-        tk.Label(help_frame, text=help_text, bg='#1a1a1a', fg='#888888', 
-                font=('Arial', 9, 'italic')).pack(pady=5)
+
+        help_text = (
+            "💡 Scroll: Move | Shift+Scroll: Horizontal | Ctrl+Scroll: Zoom | "
+            "Click: Create | Drag: Move | Edges: Resize | Corners: Rotate | "
+            "Double-click: Delete | ESC: Cancel | ⬅➡: Navigate"
+        )
+
+        tk.Label(
+            help_frame,
+            text=help_text,
+            bg='#1a1a1a',
+            fg='#888888',
+            font=('Arial', 9, 'italic')
+        ).pack(pady=5)
+
         
     def create_right_sidebar(self, parent):
         right_frame = tk.Frame(parent, width=350, bg='#252525')
@@ -647,6 +692,31 @@ class OBBAnnotator:
 
         except Exception as e:
             messagebox.showerror("Error", f"Copy failed:\n{e}")
+    def on_zoom(self, event):
+        if self.original_img is None:
+            return
+
+        # Check CTRL key
+        if not (event.state & 0x0004):
+            # Normal scroll (no zoom)
+            if event.delta:
+                self.canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            return
+
+        # CTRL + Scroll → Zoom
+        zoom = 1.1 if event.delta > 0 else 0.9
+        new_zoom = self.zoom_factor * zoom
+
+        if not (0.2 <= new_zoom <= 5.0):
+            return
+
+        self.zoom_factor = new_zoom
+
+        # Re-render image (center-based zoom)
+        self.display_image()
+
+        self.status_var.set(f"🔍 Zoom: {self.zoom_factor:.2f}x")
+
 
 
     def check_annotation_exists(self, stem):
@@ -863,7 +933,9 @@ class OBBAnnotator:
         
         scale_w = (canvas_width - 100) / self.W
         scale_h = (canvas_height - 100) / self.H
-        self.scale = min(scale_w, scale_h, 1.0)
+        self.base_scale = min(scale_w, scale_h, 1.0)
+        self.scale = self.base_scale * self.zoom_factor
+
         
         new_w = int(self.W * self.scale)
         new_h = int(self.H * self.scale)
@@ -880,7 +952,15 @@ class OBBAnnotator:
         self.canvas.delete("all")
         self.canvas.create_image(self.image_offset_x, self.image_offset_y, 
                                 anchor=tk.NW, image=self.photo, tags='image')
-        
+        self.canvas.config(
+                scrollregion=(
+                    self.image_offset_x,
+                    self.image_offset_y,
+                    self.image_offset_x + new_w,
+                    self.image_offset_y + new_h
+                )
+            )
+
         self.redraw_all_boxes()
         self.update_info_display()
         
@@ -923,9 +1003,10 @@ class OBBAnnotator:
         img_x, img_y = self.canvas_to_image(event.x, event.y)
         
         # Check for existing interactions first
-        clicked_box = self.get_box_at_point(event.x, event.y)
         clicked_handle = self.get_rotation_handle_at_point(event.x, event.y)
         clicked_edge = self.get_resize_edge_at_point(event.x, event.y)
+        clicked_box = self.get_box_at_point(event.x, event.y)
+
         
         if clicked_handle is not None:
             self.mode = 'rotating'
@@ -1177,14 +1258,16 @@ class OBBAnnotator:
     
     def get_box_at_point(self, cx, cy):
         img_x, img_y = self.canvas_to_image(cx, cy)
-        for idx, (corners, class_id) in enumerate(self.obb_list):
+        for idx in reversed(range(len(self.obb_list))):
+            corners, class_id = self.obb_list[idx]
             if self.point_in_polygon(img_x, img_y, corners):
                 return idx
         return None
     
     def get_rotation_handle_at_point(self, cx, cy):
-        ROTATE_DETECT_RADIUS = 5
-        for idx, (corners, class_id) in enumerate(self.obb_list):
+        ROTATE_DETECT_RADIUS = max(6, int(6 * self.scale))
+        for idx in reversed(range(len(self.obb_list))):
+            corners, class_id = self.obb_list[idx]
             for corner_x, corner_y in corners:
                 handle_cx, handle_cy = self.image_to_canvas(corner_x, corner_y)
                 dist = math.sqrt((cx - handle_cx)**2 + (cy - handle_cy)**2)
@@ -1193,24 +1276,25 @@ class OBBAnnotator:
         return None
     
     def get_resize_edge_at_point(self, cx, cy):
-        """Check if point is near an edge of any box. Returns (box_idx, edge_idx)"""
-        threshold = 4  # Distance threshold for edge detection
-        
-        for idx, (corners, class_id) in enumerate(self.obb_list):
+        threshold = max(6, int(6 * self.scale))
+
+        for idx in reversed(range(len(self.obb_list))):
+            corners, class_id = self.obb_list[idx]
             canvas_corners = [self.image_to_canvas(x, y) for x, y in corners]
-            
-            # Check each edge
+
             for i in range(4):
                 p1 = canvas_corners[i]
                 p2 = canvas_corners[(i + 1) % 4]
-                
-                # Calculate distance from point to line segment
-                dist = self.point_to_segment_distance(cx, cy, p1[0], p1[1], p2[0], p2[1])
-                
+
+                dist = self.point_to_segment_distance(
+                    cx, cy, p1[0], p1[1], p2[0], p2[1]
+                )
+
                 if dist < threshold:
                     return (idx, i)
-        
+
         return None
+
     
     def point_to_segment_distance(self, px, py, x1, y1, x2, y2):
         """Calculate distance from point to line segment"""
