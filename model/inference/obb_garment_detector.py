@@ -217,9 +217,38 @@ class OBBGarmentDetector:
     def load_logo(self, logo_path: str) -> np.ndarray:
         """
         Load logo with alpha channel.
+        Handles PDF files by converting to PNG first.
         Removes white background if logo doesn't have alpha channel.
         """
-        logo = cv2.imread(str(logo_path), cv2.IMREAD_UNCHANGED)
+        logo_path = str(logo_path)
+        
+        # Handle PDF logos - convert to PNG first
+        if logo_path.lower().endswith('.pdf'):
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(logo_path)
+                page = doc[0]
+                zoom = 2.0  # 144 DPI
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat, alpha=True)
+                
+                # Convert to numpy array
+                img_data = np.frombuffer(pix.samples, dtype=np.uint8)
+                img_data = img_data.reshape(pix.height, pix.width, pix.n)
+                
+                doc.close()
+                
+                # Convert RGBA to BGRA for OpenCV
+                if pix.n == 4:
+                    logo = cv2.cvtColor(img_data, cv2.COLOR_RGBA2BGRA)
+                else:
+                    logo = cv2.cvtColor(img_data, cv2.COLOR_RGB2BGRA)
+                    
+            except Exception as e:
+                raise FileNotFoundError(f"Cannot load PDF logo: {logo_path} - {e}")
+        else:
+            logo = cv2.imread(logo_path, cv2.IMREAD_UNCHANGED)
+            
         if logo is None:
             raise FileNotFoundError(f"Cannot load logo: {logo_path}")
         

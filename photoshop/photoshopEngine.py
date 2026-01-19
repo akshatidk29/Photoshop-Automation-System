@@ -275,45 +275,32 @@ def preparePairDoc(imagePath, logoPath, locationName, coordinates, rotation,
         app.Visible = True
         location = str(locationName).strip().upper().replace(" ", "-")
 
-        # For T-SHIRT garments, use clipped logos for clean placement
+        # Apply rotation to logo if needed
         actualLogoPath = logoPath
-        useClippedLogo = False
-        clippedLogoOffset = (0, 0)
-        
-        if garmentType == "T-SHIRT":
+        if rotation and abs(rotation) > 0.5:  # Only rotate if angle > 0.5 degrees
             try:
-                # Import clipping functions
-                from detectors.garmentDetector import createClippedLogo, parseClippedLogoOffset
-                
-                # Create clipped logo masked to garment silhouette
-                clippedPath = createClippedLogo(imagePath, logoPath, locationName, rotation, scaleFactor=0.8)
-                
-                if clippedPath:
-                    actualLogoPath = clippedPath
-                    clippedLogoOffset = parseClippedLogoOffset(clippedPath)
-                    useClippedLogo = True
-                    print(f"    [LOGO] Using clipped logo for {locationName}")
-                else:
-                    # Fallback to rotation-only
-                    if rotation and abs(rotation) > 0.5:
-                        actualLogoPath = rotateLogo(logoPath, rotation)
-                        print(f"    [LOGO] Rotated by {rotation:.1f}° -> {actualLogoPath}")
+                actualLogoPath = rotateLogo(logoPath, rotation)
+                print(f"    [LOGO] Rotated by {rotation:.1f}° -> {actualLogoPath}")
             except Exception as e:
-                print(f"    [WARN] Clipping failed: {e}, using rotation only")
-                if rotation and abs(rotation) > 0.5:
-                    try:
-                        actualLogoPath = rotateLogo(logoPath, rotation)
-                        print(f"    [LOGO] Rotated by {rotation:.1f}° -> {actualLogoPath}")
-                    except Exception as e2:
-                        print(f"    [WARN] Rotation failed: {e2}, using original")
-        else:
-            # Non-garment: just rotate if needed
-            if rotation and abs(rotation) > 0.5:
-                try:
-                    actualLogoPath = rotateLogo(logoPath, rotation)
-                    print(f"    [LOGO] Rotated by {rotation:.1f}° -> {actualLogoPath}")
-                except Exception as e:
-                    print(f"    [WARN] Failed to rotate logo: {e}, using original")
+                print(f"    [WARN] Failed to rotate logo: {e}, using original")
+                actualLogoPath = logoPath
+        
+        # Only clip for positions that may extend beyond garment edges
+        CLIP_POSITIONS = ['BICEP', 'SLEEVE', 'COLLAR']
+        should_clip = garmentType == "T-SHIRT" and any(pos in location for pos in CLIP_POSITIONS)
+        
+        if should_clip and coordinates:
+            try:
+                from core.logoClipper import clipLogoToGarment
+                clipped = clipLogoToGarment(
+                    actualLogoPath, imagePath,
+                    coordinates[0], coordinates[1]
+                )
+                if clipped and clipped != actualLogoPath:
+                    actualLogoPath = clipped
+                    print(f"    [LOGO] Clipped to garment silhouette")
+            except Exception as e:
+                print(f"    [WARN] Clipping failed: {e}")
 
         # Open main image and ensure canvas size
         doc = app.Open(imagePath)
@@ -363,44 +350,29 @@ def preparePairDoc(imagePath, logoPath, locationName, coordinates, rotation,
         logoWidth = bounds[2] - bounds[0]
         logoHeight = bounds[3] - bounds[1]
 
-        # Handle clipped logo positioning vs regular logo positioning
-        if useClippedLogo:
-            # Clipped logo: already sized and masked, position at offset (top-left)
-            # The clipped logo is cropped from the full image, so its offset is where it should go
-            offset_x, offset_y = clippedLogoOffset
-            currentX = bounds[0]
-            currentY = bounds[1]
-            moveX = offset_x - currentX
-            moveY = offset_y - currentY
-            try:
-                pastedLayer.Translate(moveX, moveY)
-            except Exception:
-                pastedLayer.Translate(int(moveX), int(moveY))
-            print(f"    [LOGO] Positioned clipped logo at offset ({offset_x}, {offset_y})")
+        # Resolve desired size
+        desiredWidth, desiredHeight = customLogoSize
+
+        # Avoid divide-by-zero
+        if logoWidth == 0 or logoHeight == 0:
+            logError(f"Invalid logo dimensions for temp doc {targetName}: w={logoWidth}, h={logoHeight}")
         else:
-            # Regular logo: scale and center at coordinates
-            desiredWidth, desiredHeight = customLogoSize
+            scaleW = (desiredWidth / logoWidth) * 100
+            scaleH = (desiredHeight / logoHeight) * 100
+            scale = min(scaleW, scaleH)
+            pastedLayer.Resize(scale, scale, 5)
 
-            # Avoid divide-by-zero
-            if logoWidth == 0 or logoHeight == 0:
-                logError(f"Invalid logo dimensions for temp doc {targetName}: w={logoWidth}, h={logoHeight}")
-            else:
-                scaleW = (desiredWidth / logoWidth) * 100
-                scaleH = (desiredHeight / logoHeight) * 100
-                scale = min(scaleW, scaleH)
-                pastedLayer.Resize(scale, scale, 5)
-
-                # Recompute bounds and translate to target coordinates
-                bounds = pastedLayer.Bounds
-                newWidth = bounds[2] - bounds[0]
-                newHeight = bounds[3] - bounds[1]
-                x, y = coordinates
-                offsetX = x - (bounds[0] + newWidth / 2)
-                offsetY = y - (bounds[1] + newHeight / 2)
-                try:
-                    pastedLayer.Translate(offsetX, offsetY)
-                except Exception:
-                    pastedLayer.Translate(int(offsetX), int(offsetY))
+            # Recompute bounds and translate to target coordinates
+            bounds = pastedLayer.Bounds
+            newWidth = bounds[2] - bounds[0]
+            newHeight = bounds[3] - bounds[1]
+            x, y = coordinates
+            offsetX = x - (bounds[0] + newWidth / 2)
+            offsetY = y - (bounds[1] + newHeight / 2)
+            try:
+                pastedLayer.Translate(offsetX, offsetY)
+            except Exception:
+                pastedLayer.Translate(int(offsetX), int(offsetY))
 
         # Restore ruler units
         app.Preferences.RulerUnits = originalRulerUnits
@@ -463,7 +435,7 @@ def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rot
         # Get desired logo size
         desiredWidth, desiredHeight = customLogoSize
 
-        # Place logo at EACH position (with per-position clipping/rotation)
+        # Place logo at EACH position (with per-position rotation)
         for idx, (position, coordinates) in enumerate(zip(positionsList, coordinatesList)):
             if coordinates is None:
                 print(f"    [WARN] Skipping position {position} - no coordinates")
@@ -472,39 +444,34 @@ def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rot
             # Get rotation for this position
             rotation = rotationsList[idx] if idx < len(rotationsList) else 0.0
             
-            # For T-SHIRT garments, use clipped logos
+            # Apply rotation to logo if needed
             actualLogoPath = logoPath
-            useClippedLogo = False
-            clippedLogoOffset = (0, 0)
-            
-            if garmentType == "T-SHIRT":
+            if rotation and abs(rotation) > 0.5:  # Only rotate if angle > 0.5 degrees
                 try:
-                    from detectors.garmentDetector import createClippedLogo, parseClippedLogoOffset
-                    clippedPath = createClippedLogo(imagePath, logoPath, position, rotation, scaleFactor=0.8)
-                    if clippedPath:
-                        actualLogoPath = clippedPath
-                        clippedLogoOffset = parseClippedLogoOffset(clippedPath)
-                        useClippedLogo = True
-                        print(f"    [LOGO] Using clipped logo for {position}")
-                    else:
-                        if rotation and abs(rotation) > 0.5:
-                            actualLogoPath = rotateLogo(logoPath, rotation)
+                    actualLogoPath = rotateLogo(logoPath, rotation)
+                    print(f"    [LOGO] Rotated by {rotation:.1f}° for {position}")
                 except Exception as e:
-                    print(f"    [WARN] Clipping failed for {position}: {e}")
-                    if rotation and abs(rotation) > 0.5:
-                        try:
-                            actualLogoPath = rotateLogo(logoPath, rotation)
-                        except:
-                            pass
-            else:
-                if rotation and abs(rotation) > 0.5:
-                    try:
-                        actualLogoPath = rotateLogo(logoPath, rotation)
-                        print(f"    [LOGO] Rotated by {rotation:.1f}° for {position}")
-                    except Exception as e:
-                        print(f"    [WARN] Failed to rotate logo: {e}, using original")
+                    print(f"    [WARN] Failed to rotate logo: {e}, using original")
+                    actualLogoPath = logoPath
             
-            # Open and copy the logo
+            # Only clip for positions that may extend beyond garment edges
+            CLIP_POSITIONS = ['BICEP', 'SLEEVE', 'COLLAR']
+            pos_upper = str(position).upper()
+            should_clip = garmentType == "T-SHIRT" and any(p in pos_upper for p in CLIP_POSITIONS)
+            
+            if should_clip:
+                try:
+                    from core.logoClipper import clipLogoToGarment
+                    clipped = clipLogoToGarment(
+                        actualLogoPath, imagePath,
+                        coordinates[0], coordinates[1]
+                    )
+                    if clipped and clipped != actualLogoPath:
+                        actualLogoPath = clipped
+                except Exception:
+                    pass
+            
+            # Open and copy the (rotated) logo
             logoDoc = app.Open(actualLogoPath)
             logoDoc.Selection.SelectAll()
             logoDoc.Selection.Copy()
@@ -527,34 +494,24 @@ def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rot
             if logoWidth == 0 or logoHeight == 0:
                 continue
 
-            if useClippedLogo:
-                # Clipped logo: position at offset
-                offset_x, offset_y = clippedLogoOffset
-                moveX = offset_x - bounds[0]
-                moveY = offset_y - bounds[1]
-                try:
-                    pastedLayer.Translate(moveX, moveY)
-                except Exception:
-                    pastedLayer.Translate(int(moveX), int(moveY))
-                print(f"    [LOGO] Placed clipped at {position}: offset ({offset_x}, {offset_y})")
-            else:
-                # Regular logo: scale and center
-                scaleW = (desiredWidth / logoWidth) * 100
-                scaleH = (desiredHeight / logoHeight) * 100
-                scale = min(scaleW, scaleH)
-                pastedLayer.Resize(scale, scale, 5)
+            scaleW = (desiredWidth / logoWidth) * 100
+            scaleH = (desiredHeight / logoHeight) * 100
+            scale = min(scaleW, scaleH)
+            pastedLayer.Resize(scale, scale, 5)
 
-                bounds = pastedLayer.Bounds
-                newWidth = bounds[2] - bounds[0]
-                newHeight = bounds[3] - bounds[1]
-                x, y = coordinates
-                offsetX = x - (bounds[0] + newWidth / 2)
-                offsetY = y - (bounds[1] + newHeight / 2)
-                try:
-                    pastedLayer.Translate(offsetX, offsetY)
-                except Exception:
-                    pastedLayer.Translate(int(offsetX), int(offsetY))
-                print(f"    [LOGO] Placed at {position}: ({x}, {y})")
+            # Recompute bounds and translate to target coordinates
+            bounds = pastedLayer.Bounds
+            newWidth = bounds[2] - bounds[0]
+            newHeight = bounds[3] - bounds[1]
+            x, y = coordinates
+            offsetX = x - (bounds[0] + newWidth / 2)
+            offsetY = y - (bounds[1] + newHeight / 2)
+            try:
+                pastedLayer.Translate(offsetX, offsetY)
+            except Exception:
+                pastedLayer.Translate(int(offsetX), int(offsetY))
+
+            print(f"    [LOGO] Placed at {position}: ({x}, {y})")
 
         # Restore ruler units
         app.Preferences.RulerUnits = originalRulerUnits
