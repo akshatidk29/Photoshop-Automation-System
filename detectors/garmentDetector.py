@@ -1,27 +1,19 @@
 """
 Garment Detector using YOLO OBB Model.
-
 Provides coordinates, rotation, and logo scale for garment regions.
-Uses OBB (Oriented Bounding Box) detection for accurate region detection.
 """
 
 import os
 from pathlib import Path
+from detectors.inference import InferenceEngine
 
-# Import OBB detector
-try:
-    from model.inference.obb_garment_detector import OBBGarmentDetector, PLACEMENT_CONFIG
-except ImportError:
-    # Fallback for different import paths
-    import sys
-    project_root = Path(__file__).parent.parent
-    sys.path.insert(0, str(project_root))
-    from model.inference.obb_garment_detector import OBBGarmentDetector, PLACEMENT_CONFIG
+# Model Path
+# Points to detectors/weights/garment/best.pt
+MODEL_PATH = Path(__file__).parent / "weights" / "garment" / "best.pt"
 
-
-# Location name mapping: Excel format -> OBB class names
+# Location Mapping: Excel Name -> OBB Class Name
 LOCATION_MAP = {
-    # Front regions
+    # Front
     "FULL-FRONT": "FULL_FRONT",
     "LEFT-CHEST": "LEFT_CHEST",
     "RIGHT-CHEST": "RIGHT_CHEST",
@@ -39,274 +31,106 @@ LOCATION_MAP = {
     "RIGHT-THIGH-HIGH": "RIGHT_THIGH_HIGH",
     "ON-POCKET": "ON_POCKET",
     
-    # Back regions
+    # Back
     "FULL-BACK": "FULL_BACK",
     "BACK-YOKE": "BACK_YOKE",
 }
 
+# Singleton Instance & Cache
+_inferenceEngine = None
+_detectionCache = {}
 
-# Singleton OBB detector instance (lazy loaded)
-_obb_detector = None
-_detection_cache = {}
+def _getInferenceEngine():
+    """Get or create singleton inference engine."""
+    global _inferenceEngine
+    if _inferenceEngine is None:
+        print(f"[GarmentDetector] Initializing model from {MODEL_PATH}")
+        _inferenceEngine = InferenceEngine(str(MODEL_PATH))
+    return _inferenceEngine
 
-
-def _get_obb_detector():
-    """Get or create the OBB detector singleton."""
-    global _obb_detector
-    if _obb_detector is None:
-        print("[GarmentDetector] Initializing OBB detector...")
-        _obb_detector = OBBGarmentDetector()
-        print("[GarmentDetector] OBB detector ready.")
-    return _obb_detector
-
-
-def _get_cached_regions(imagePath):
-    """Get cached detection results for an image."""
-    global _detection_cache
+def _getRegions(imagePath):
+    """Get detected regions (cached)."""
+    global _detectionCache
     
-    # Create cache key from path and mtime
+    # Cache key based on path and modification time
     try:
         mtime = os.path.getmtime(imagePath)
     except:
         mtime = 0
     
-    key = (os.path.abspath(imagePath), mtime)
+    key = (str(imagePath), mtime)
     
-    if key not in _detection_cache:
-        detector = _get_obb_detector()
-        regions = detector.detect(imagePath)
-        _detection_cache[key] = {r.class_name: r for r in regions}
-    
-    return _detection_cache[key]
+    if key not in _detectionCache:
+        engine = _getInferenceEngine()
+        regions = engine.detect(str(imagePath))
+        # Store as dict for fast lookup by className
+        _detectionCache[key] = {r.className: r for r in regions}
+        
+    return _detectionCache[key]
 
+def _normalizeLocation(locationName):
+    """Normalize location name."""
+    if not locationName: return ""
+    return str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
 
-def _normalize_location(locationName):
-    """Normalize location name to match LOCATION_MAP keys."""
-    if not locationName:
-        return ""
-    # Uppercase and replace spaces with hyphens
-    normalized = str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
-    return normalized
+def _getObbClassName(locationName):
+    """Get OBB class name from location."""
+    norm = _normalizeLocation(locationName)
+    return LOCATION_MAP.get(norm, norm.replace("-", "_"))
 
-
-def _get_obb_class_name(locationName):
-    """Convert Excel location name to OBB class name."""
-    normalized = _normalize_location(locationName)
-    return LOCATION_MAP.get(normalized, normalized.replace("-", "_"))
-
+# ============================================================================
+# Public Interface
+# ============================================================================
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """
-    Get (x, y) coordinates for logo placement using OBB detector.
-    
-    Args:
-        imagePath: Path to the garment image.
-        locationName: Location name (e.g., "LEFT-CHEST", "FULL-FRONT").
-        originalLocation: Optional, original location context (for combo positions).
-        debug: Enable debug output.
-        
-    Returns:
-        (x, y) tuple of coordinates, or None if region not found.
+    Get (x, y) coordinates for placement.
+    Returns None if region not found.
     """
     try:
-        regions = _get_cached_regions(imagePath)
-        obb_name = _get_obb_class_name(locationName)
+        regions = _getRegions(imagePath)
+        targetClass = _getObbClassName(locationName)
         
         if debug:
-            print(f"[getCoordinates] Looking for '{obb_name}' in {list(regions.keys())}")
-        
-        if obb_name in regions:
-            region = regions[obb_name]
+            print(f"[getCoordinates] Looking for '{targetClass}' in detected regions")
+            
+        if targetClass in regions:
+            region = regions[targetClass]
             coords = (int(region.center[0]), int(region.center[1]))
-            if debug:
-                print(f"[getCoordinates] Found {obb_name} at {coords}")
+            if debug: print(f"[getCoordinates] Found at {coords}")
             return coords
-        
-        # Not found
-        if debug:
-            print(f"[getCoordinates] Region '{obb_name}' not found!")
+            
         return None
         
     except Exception as e:
-        print(f"[getCoordinates] Error: {e}")
+        print(f"[GarmentDetector] Error getting coordinates: {e}")
         return None
-
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """
-    Get logo scale for a location.
-    
-    Returns 300px for FULL-FRONT/FULL-BACK, 99px for everything else.
-    """
-    location = str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
-    
-    if "FULL-FRONT" in location or "FULL-BACK" in location:
-        return (300, 300)
-    
-    return (99, 99)
-
 
 def getRotation(imagePath, locationName):
     """
-    Get rotation angle for logo placement using OBB detector.
-    
-    The rotation angle comes directly from the OBB bounding box orientation.
-    Logo should be rotated by this angle to align with the garment region.
-    
-    Args:
-        imagePath: Path to the garment image.
-        locationName: Location name.
-        
-    Returns:
-        Rotation angle in degrees (for OpenCV/Photoshop).
+    Get rotation angle (degrees).
+    Returns 0.0 if region not found.
     """
     try:
-        regions = _get_cached_regions(imagePath)
-        obb_name = _get_obb_class_name(locationName)
+        regions = _getRegions(imagePath)
+        targetClass = _getObbClassName(locationName)
         
-        if obb_name in regions:
-            region = regions[obb_name]
-            # Return negated angle (OBB uses counterclockwise, Photoshop uses clockwise)
-            return -region.angle
-        
+        if targetClass in regions:
+            # Return negated angle (OBB is CCW, Photoshop needs CW)
+            return -regions[targetClass].angle
+            
         return 0.0
         
     except Exception as e:
-        print(f"[getRotation] Error: {e}")
+        print(f"[GarmentDetector] Error getting rotation: {e}")
         return 0.0
 
-
-# ============================================
-# Legacy compatibility functions
-# ============================================
-
-def getGarmentCoordinates(imagePath, locationName, originalLocation=None, debug=False):
-    """Legacy function name - calls getCoordinates."""
-    return getCoordinates(imagePath, locationName, originalLocation, debug)
-
-
-def getGarmentLogoScale(imagePath, locationName, baseLogoSize=(200, 100)):
-    """Legacy function name - calls getLogoScale."""
-    return getLogoScale(imagePath, locationName, baseLogoSize)
-
-
-def getGarmentRotationAngle(imagePath, locationName):
-    """Legacy function name - calls getRotation."""
-    return getRotation(imagePath, locationName)
-
-
-# ============================================
-# OBB Clipping Functions (for clean logo placement)
-# ============================================
-
-def getOBBBoxPoints(imagePath, locationName):
+def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
     """
-    Get the 4 corner points of the OBB for a specific location.
-    
-    Args:
-        imagePath: Path to the garment image.
-        locationName: Location name (e.g., "LEFT-BICEP").
-        
-    Returns:
-        4x2 numpy array of corner points, or None if not found.
+    Get logo sizing strategy.
+    Returns (300, 300) for Full Front/Back, (99, 99) for others.
     """
-    try:
-        from model.inference.obb_garment_detector import getOBBBoxPoints as _getOBBBoxPoints
-        obb_name = _get_obb_class_name(locationName)
-        return _getOBBBoxPoints(imagePath, obb_name)
-    except Exception as e:
-        print(f"[getOBBBoxPoints] Error: {e}")
-        return None
-
-
-def getOBBRegionSize(imagePath, locationName):
-    """
-    Get the width and height of the OBB for a specific location.
-    
-    Args:
-        imagePath: Path to the garment image.
-        locationName: Location name.
-        
-    Returns:
-        (width, height) tuple, or None if not found.
-    """
-    try:
-        from model.inference.obb_garment_detector import getOBBRegionSize as _getOBBRegionSize
-        obb_name = _get_obb_class_name(locationName)
-        return _getOBBRegionSize(imagePath, obb_name)
-    except Exception as e:
-        print(f"[getOBBRegionSize] Error: {e}")
-        return None
-
-
-def createClippedLogo(imagePath, logoPath, locationName, rotation=None, scaleFactor=0.8):
-    """
-    Create a logo image clipped/masked to the OBB region bounds.
-    
-    The logo is rotated, scaled to fit the OBB, and masked so only
-    pixels within the OBB polygon are visible. Returns path to temp file.
-    
-    Args:
-        imagePath: Path to the garment image.
-        logoPath: Path to the logo image.
-        locationName: Location name (e.g., "LEFT-BICEP").
-        rotation: Optional rotation angle. If None, uses OBB angle.
-        scaleFactor: How much of OBB width to fill (0.8 = 80%).
-        
-    Returns:
-        Path to clipped logo temp file, or None if failed.
-    """
-    try:
-        from model.inference.obb_garment_detector import createClippedLogo as _createClippedLogo
-        obb_name = _get_obb_class_name(locationName)
-        return _createClippedLogo(imagePath, logoPath, obb_name, rotation, scaleFactor)
-    except Exception as e:
-        print(f"[createClippedLogo] Error: {e}")
-        return None
-
-
-def parseClippedLogoOffset(clippedLogoPath):
-    """
-    Parse the placement offset from a clipped logo filename.
-    
-    Args:
-        clippedLogoPath: Path to clipped logo file.
-        
-    Returns:
-        (offset_x, offset_y) tuple for positioning in image coordinates.
-    """
-    try:
-        from model.inference.obb_garment_detector import parseClippedLogoOffset as _parseOffset
-        return _parseOffset(clippedLogoPath)
-    except Exception as e:
-        print(f"[parseClippedLogoOffset] Error: {e}")
-        return (0, 0)
-
-
-# ============================================
-# Testing
-# ============================================
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) < 2:
-        print("Usage: python garmentDetector.py <image_path> [location]")
-        sys.exit(1)
-    
-    img_path = sys.argv[1]
-    location = sys.argv[2] if len(sys.argv) > 2 else "FULL-FRONT"
-    
-    print(f"\nTesting OBB Garment Detector")
-    print(f"Image: {img_path}")
-    print(f"Location: {location}")
-    print("-" * 40)
-    
-    coords = getCoordinates(img_path, location, debug=True)
-    scale = getLogoScale(img_path, location)
-    rotation = getRotation(img_path, location)
-    
-    print(f"\nResults:")
-    print(f"  Coordinates: {coords}")
-    print(f"  Logo Scale: {scale}")
-    print(f"  Rotation: {rotation:.1f}°")
+    loc = _normalizeLocation(locationName)
+    if "FULL-FRONT" in loc or "FULL-BACK" in loc:
+        return (300, 300)
+    return (99, 99)
