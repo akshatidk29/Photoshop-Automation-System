@@ -133,32 +133,17 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 
 
 def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-
-    obb_name = _get_obb_class_name(locationName)
-    config = PLACEMENT_CONFIG.get(obb_name, {"base_size": 99})
-    default_size = config.get("base_size", 99)
+    """
+    Get logo scale for a location.
     
-    # Determine target width from OBB
-    target_width = default_size
+    Returns 300px for FULL-FRONT/FULL-BACK, 99px for everything else.
+    """
+    location = str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
     
-    try:
-        regions = _get_cached_regions(imagePath)
-        
-        if obb_name in regions:
-            region = regions[obb_name]
-            obb_width, obb_height = region.size
-            
-            obb_min_dim = max(obb_width, obb_height)
-            
-            target_width = int(obb_min_dim)
-            target_width = max(target_width, 99)
-        
-    except Exception as e:
-        print(f"[getLogoScale] Error checking OBB: {e}")
+    if "FULL-FRONT" in location or "FULL-BACK" in location:
+        return (300, 300)
     
-    target_height = target_width 
-    
-    return (target_width, target_height)
+    return (99, 99)
 
 
 def getRotation(imagePath, locationName):

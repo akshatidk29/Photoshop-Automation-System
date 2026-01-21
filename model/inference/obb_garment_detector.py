@@ -26,7 +26,7 @@ except ImportError:
 
 
 # Default OBB model path
-DEFAULT_OBB_MODEL = Path(__file__).parent.parent / "runs" / "obb" / "train3" / "weights" / "best.pt"
+DEFAULT_OBB_MODEL = Path(__file__).parent.parent / "runs" / "obb" / "train4" / "weights" / "best.pt"
 
 
 # Placement configuration for each region type

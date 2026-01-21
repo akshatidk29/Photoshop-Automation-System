@@ -88,16 +88,15 @@ def _getGarmentMaskSimple(image: np.ndarray) -> np.ndarray:
 
 
 def clipLogoToGarment(logo_path: str, garment_image_path: str, 
-                       center_x: int, center_y: int) -> str:
+                       center_x: int, center_y: int, target_size: int = None) -> str:
     """
     Clip a logo so only pixels that fall on the garment are visible.
-    
-    NO RESIZING - uses logo at its current size.
     
     Args:
         logo_path: Path to logo file (PNG or rotated temp file).
         garment_image_path: Path to garment image.
         center_x, center_y: Where logo center will be placed.
+        target_size: Optional target size to resize BEFORE clipping. If None, uses original size.
         
     Returns:
         Path to clipped logo temp file.
@@ -112,7 +111,16 @@ def clipLogoToGarment(logo_path: str, garment_image_path: str,
     if garment_mask is None:
         return logo_path  # Return original on failure
     
-    # Logo stays at original size - NO RESIZING
+    # RESIZE logo to target_size FIRST (maintaining aspect ratio)
+    if target_size is not None:
+        lh, lw = logo.shape[:2]
+        if lw > 0 and lh > 0:
+            scale = target_size / max(lw, lh)
+            new_w = int(lw * scale)
+            new_h = int(lh * scale)
+            logo = cv2.resize(logo, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Now use the properties (resized or original)
     lh, lw = logo.shape[:2]
     gh, gw = garment_mask.shape[:2]
     
