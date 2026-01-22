@@ -40,13 +40,11 @@ CLASS_LABELS = {
     # Cap-related
     "18": "CAP_BACK",
     "19": "CAP_SIDE",
-    "20": "CAP_FRONT_SIDE",
-
-    # Crown-related
+    "20": "CAP_FRONT",
     "21": "LOWER_LEFT_CROWN",
     "22": "LOWER_RIGHT_CROWN",
 
-    # Other items / products
+    # Towel-related
     "23": "CORNER_ANGLED_TOWEL",
     "24": "FRONT_CENTER",
 
@@ -309,6 +307,7 @@ class OBBAnnotator:
         modes = [
             ("99 × 66", "99x66"),
             ("66 × 66", "66x66"),
+            ("180 × 120", "180x120"),
             ("300 × 200", "300x200"),
             ("Custom (Click & Drag)", "custom")
         ]
@@ -1076,6 +1075,8 @@ class OBBAnnotator:
                     width, height = 99, 66
                 elif mode == "66x66":
                     width, height = 66, 66
+                elif mode == "180x120":
+                    width, height = 180, 120
                 elif mode == "300x200":
                     width, height = 300, 200
                 else:

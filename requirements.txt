@@ -7,3 +7,9 @@ pywin32
 pdf2image
 pillow
 PyPDF2
+
+ultralytics
+opencv-python
+numpy
+matplotlib
+tqdm
