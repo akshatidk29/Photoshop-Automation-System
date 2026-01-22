@@ -873,24 +873,57 @@ class OBBAnnotator:
     
     def on_image_select(self, event):
         """Handle image selection from list"""
-        if self.image_listbox.curselection():
-            # Store current selection index before navigation check
-            temp_selection_idx = self.image_listbox.curselection()[0]
+        # First, capture the selection before any dialogs might clear it
+        selection = self.image_listbox.curselection()
+        if not selection:
+            return
         
+        # Store the selected listbox index and get the display name
+        listbox_idx = selection[0]
+        selected_display = self.image_listbox.get(listbox_idx)[2:]  # Remove status symbol (e.g., "✓ " or "○ ")
+        
+        # Find the matching image file index BEFORE navigation check
+        # This handles both filtered and unfiltered lists, and truncated names
+        target_idx = None
+        search_term = self.search_var.get().lower()
+        
+        if not search_term:
+            # No filter active - listbox index matches image_files index directly
+            target_idx = listbox_idx
+        else:
+            # Filter is active - need to find the actual index by matching names
+            filtered_idx = 0
+            for idx, img_file in enumerate(self.image_files):
+                if search_term in img_file.name.lower():
+                    if filtered_idx == listbox_idx:
+                        target_idx = idx
+                        break
+                    filtered_idx += 1
+        
+        # Fallback: match by name (handles truncated names with startswith)
+        if target_idx is None:
+            for idx, img_file in enumerate(self.image_files):
+                display_name = self.format_image_list_item(img_file.name)
+                if display_name == selected_display or img_file.name == selected_display:
+                    target_idx = idx
+                    break
+        
+        if target_idx is None:
+            return
+        
+        # Don't reload if already on the same image
+        if target_idx == self.current_image_idx:
+            return
+        
+        # Now do the navigation check (which may show dialogs)
         if not self.check_and_save_before_navigation():
             # Reset selection to current image
             self.image_listbox.selection_clear(0, tk.END)
             self.image_listbox.selection_set(self.current_image_idx)
             return
         
-        selection = self.image_listbox.curselection()
-        if selection:
-            # Get the actual index from the displayed name
-            selected_name = self.image_listbox.get(selection[0])[2:]  # Remove status symbol
-            for idx, img_file in enumerate(self.image_files):
-                if img_file.name == selected_name:
-                    self.load_image(idx)
-                    break
+        # Load the target image
+        self.load_image(target_idx)
     
     def on_closing(self):
         """Handle window close event"""
