@@ -46,16 +46,18 @@ CLASS_LABELS = {
 
     # Towel-related
     "23": "CORNER_ANGLED_TOWEL",
-    "24": "FRONT_CENTER",
+    "24": "FRONT_NAPKIN",
 
     # Bag-related
     "25": "FRONT_ON_BAG",
-    "26": "ON_POCKET_ON_BAG"
+    "26": "ON_POCKET_ON_BAG",
+
+    "27": "FRONT_CENTER"
 }
 
 MIN_AREA = 200             # ignore tiny boxes
-IMAGES_FOLDER = "Data_1"      # <-- SET YOUR IMAGES FOLDER
-LABELS_FOLDER = "Annotations"      # <-- SET YOUR LABELS FOLDER
+IMAGES_FOLDER = "_Images"      # <-- SET YOUR IMAGES FOLDER
+LABELS_FOLDER = "_Annotations"      # <-- SET YOUR LABELS FOLDER
 # ==================================================
 class OBBAnnotator:
     def __init__(self, root):
