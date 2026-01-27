@@ -193,16 +193,3 @@ def _loadLogo(logo_path: str) -> np.ndarray:
             logo = cv2.merge([b, g, r, alpha])
         return logo
 
-
-def _rotateLogo(logo: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate logo preserving alpha."""
-    h, w = logo.shape[:2]
-    center = (w / 2, h / 2)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
-    cos = abs(M[0, 0])
-    sin = abs(M[0, 1])
-    new_w = int(h * sin + w * cos)
-    new_h = int(h * cos + w * sin)
-    M[0, 2] += (new_w - w) / 2
-    M[1, 2] += (new_h - h) / 2
-    return cv2.warpAffine(logo, M, (new_w, new_h), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
