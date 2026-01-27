@@ -21,7 +21,7 @@ def main():
         device = "cpu"
 
     # load OBB model weights
-    model = YOLO("models/yolo11s-seg.pt")
+    model = YOLO("models/yolo11l-obb.pt")
 
     # Dynamically resolve path to data.yaml
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,11 +35,11 @@ def main():
 
     # GPU-optimized training configuration
     model.train(
-        task="segment",
+        task="obb",
         data=data_yaml_path,
-        epochs=150,
+        epochs=1000,
         imgsz=1024,
-        batch=24,               # Increased batch size for GPU (adjust based on VRAM)
+        batch=12,               # Increased batch size for GPU (adjust based on VRAM)
         optimizer="AdamW",
         lr0=0.001,
         lrf=0.01,
@@ -62,4 +62,3 @@ def main():
 if __name__ == '__main__':
     freeze_support()
     main()
-

@@ -7,6 +7,7 @@ pywin32
 pdf2image
 pillow
 PyPDF2
+pyyaml
 
 ultralytics
 opencv-python

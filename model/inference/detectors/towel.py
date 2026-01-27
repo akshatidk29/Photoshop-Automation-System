@@ -18,7 +18,8 @@ LOGO_SETTINGS = {
 }
 
 PLACEMENT_CONFIG = {
-    # Add classes as they become known
+    "FRONT_NAPKIN": {"baseSize": 200, "align": "center"},
+    "CORNER_ANGLED_TOWEL": {"baseSize": 200, "align": "center"},
 }
 
 # Default Model Path
@@ -35,7 +36,7 @@ if __name__ == "__main__":
     inferenceDir = currentFile.parent.parent # model/inference
     
     # Default Paths
-    testImageDir = inferenceDir / "inputs"
+    testImageDir = inferenceDir / "inputs" / "towel"
     outputDir = inferenceDir / "outputs" / "towel_test"
     logoPath = inferenceDir / "inputs" / "logo.png"
     
