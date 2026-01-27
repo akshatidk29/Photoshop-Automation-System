@@ -3,15 +3,14 @@ import win32com.client
 import pythoncom
 from services.logger import logError
 from core.config import PSD_OUTPUT_DIR, IMAGE_OUTPUT_DIR
-from .photoshopEngine import preparePairDoc
+from .photoshopEngine import preparePairDoc, prepareComboPairDoc
 
 
 class PhotoshopBatchManager:
     """Manages batch processing of images in Photoshop."""
     
-    def __init__(self, maxItemsPerBatch=200):
+    def __init__(self, maxItemsPerBatch=100):
         print("Initializing PhotoshopBatchManager...")
-        # Initialize COM for this thread (required when called from a different thread)
         pythoncom.CoInitialize()
         self.app = win32com.client.Dispatch("Photoshop.Application")
         self.app.Visible = True
@@ -73,26 +72,26 @@ class PhotoshopBatchManager:
             return False
 
     def addCombo(self, partId, imagePath, logoPath, targetName, decorationCode,
-                 positionsList, coordinatesList, rotationsList, garmentType, customLogoSize, finalName, canvasHeight=1200):
+                 positionsList, coordinatesList, rotationsList, garmentType, customLogoSize, 
+                 finalName, canvasHeight=1200, clippingEnabled=False, clippingPositions=None):
         """Add image with multiple logos (combo position) - creates ONE output image."""
-        from .photoshopEngine import prepareComboPairDoc
         
-        # All coordinates must be present
         if not coordinatesList or None in coordinatesList:
             logError(f"Skipping combo because some coordinates missing for {targetName}")
             return False
         
-        # Create doc with ALL logos placed (with rotation)
-        tempDoc = prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rotationsList,
-                                       garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
+        # Pass clipping settings to the engine
+        tempDoc = prepareComboPairDoc(
+            imagePath, logoPath, positionsList, coordinatesList, rotationsList,
+            garmentType, customLogoSize, decorationCode, targetName, canvasHeight,
+            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
+        )
         if tempDoc is None:
             logError(f"prepareComboPairDoc failed for {targetName}")
             return False
 
-        # Export the merged image as JPG (one image with all logos)
         try:
             canvasWidth = 1200
-            # canvasHeight = 1800 if garmentType == "T-SHIRT" else 1200 <-- REMOVED
             canvasFolder = f"{canvasWidth} x {canvasHeight}"
 
             forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)
@@ -131,9 +130,8 @@ class PhotoshopBatchManager:
                 pass
             return False
 
-        # Add layers to batch PSD (image layer + all logo layers)
+        # Add layers to batch PSD
         try:
-            # Ensure batch doc exists
             if self.batchDoc is None:
                 width = float(tempDoc.Width)
                 height = float(tempDoc.Height)
@@ -142,7 +140,6 @@ class PhotoshopBatchManager:
                 self.batchDoc = self.app.Documents.Add(width, height, res, name)
                 self.itemsInBatch = 0
 
-            # Ensure group exists for the product id
             self.app.ActiveDocument = self.batchDoc
             layerSets = self.batchDoc.LayerSets
             targetSet = None
@@ -158,10 +155,6 @@ class PhotoshopBatchManager:
                 targetSet = layerSets.Add()
                 targetSet.Name = str(partId)
 
-            # Duplicate ALL layers from tempDoc into the group
-            # Iterate in REVERSE order (bottom to top) so they stack correctly in target
-            # tempDoc layers: [Top Logo, ..., Bottom Image]
-            # Duplicating Base Image first -> then Logos on top
             self.app.ActiveDocument = tempDoc
             layers = tempDoc.ArtLayers
             for i in range(layers.Count - 1, -1, -1):
@@ -184,7 +177,6 @@ class PhotoshopBatchManager:
 
         self.itemsInBatch += 1
 
-        # Save and start new batch if max items reached
         if self.itemsInBatch >= self.maxItems:
             try:
                 self._saveAndCloseBatch()
@@ -196,44 +188,22 @@ class PhotoshopBatchManager:
         return True
 
     def addPair(self, partId, imagePath, logoPath, targetName, decorationCode, 
-                locationName, coordinates, rotation, garmentType, customLogoSize, finalName, canvasHeight=1200):
+                locationName, coordinates, rotation, garmentType, customLogoSize, 
+                finalName, canvasHeight=1200, clippingEnabled=False, clippingPositions=None):
         """Add image-logo pair to batch."""
-        # Coordinates must be present
+        
         if coordinates is None:
-            ctx = {
-                'partId': partId,
-                'targetName': targetName,
-                'imagePath': imagePath,
-                'logoPath': logoPath,
-                'locationName': locationName,
-                'coordinates': coordinates,
-                'garmentType': garmentType,
-                'customLogoSize': customLogoSize,
-                'finalName': finalName,
-                'imageExists': os.path.exists(imagePath) if imagePath else False,
-                'logoExists': os.path.exists(logoPath) if logoPath else False,
-            }
-            logError(f"Skipping pair because coordinates missing for {targetName} | context: {ctx}")
+            logError(f"Skipping pair because coordinates missing for {targetName}")
             return False
 
-        # Create temp doc with placed logo (with rotation)
-        tempDoc = preparePairDoc(imagePath, logoPath, locationName, coordinates, rotation,
-                                  garmentType, customLogoSize, decorationCode, targetName, canvasHeight)
+        # Pass clipping settings to the engine
+        tempDoc = preparePairDoc(
+            imagePath, logoPath, locationName, coordinates, rotation,
+            garmentType, customLogoSize, decorationCode, targetName, canvasHeight,
+            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
+        )
         if tempDoc is None:
-            ctx = {
-                'partId': partId,
-                'targetName': targetName,
-                'imagePath': imagePath,
-                'logoPath': logoPath,
-                'locationName': locationName,
-                'coordinates': coordinates,
-                'garmentType': garmentType,
-                'customLogoSize': customLogoSize,
-                'finalName': finalName,
-                'imageExists': os.path.exists(imagePath) if imagePath else False,
-                'logoExists': os.path.exists(logoPath) if logoPath else False,
-            }
-            logError(f"preparePairDoc failed for {targetName} | context: {ctx}")
+            logError(f"preparePairDoc failed for {targetName}")
             return False
 
         # Find layers
@@ -269,7 +239,6 @@ class PhotoshopBatchManager:
         # Export the merged image as JPG
         try:
             canvasWidth = 1200
-            # canvasHeight passed in argument is used
             canvasFolder = f"{canvasWidth} x {canvasHeight}"
 
             forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)
@@ -373,16 +342,11 @@ class PhotoshopBatchManager:
             self.app.ActiveDocument = self.batchDoc
             groupLayers = targetSet.ArtLayers
             try:
-                if groupLayers.Count >= 1:
-                    for j in range(1, groupLayers.Count + 1):
-                        ly = groupLayers[j-1]
-                        if getattr(ly, "Name", "") == decorationCode:
-                            pass
-                    if groupLayers.Count >= 2:
-                        groupLayers[0].Name = decorationCode
-                        groupLayers[1].Name = targetName
-                    elif groupLayers.Count == 1:
-                        groupLayers[0].Name = targetName
+                if groupLayers.Count >= 2:
+                    groupLayers[0].Name = decorationCode
+                    groupLayers[1].Name = targetName
+                elif groupLayers.Count == 1:
+                    groupLayers[0].Name = targetName
             except Exception:
                 pass
         except Exception:
@@ -390,7 +354,6 @@ class PhotoshopBatchManager:
 
         self.itemsInBatch += 1
 
-        # Save and start new batch if max items reached
         if self.itemsInBatch >= self.maxItems:
             try:
                 self._saveAndCloseBatch()

@@ -600,6 +600,12 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
     
     batchMgr = PhotoshopBatchManager(maxItemsPerBatch=100)
     
+    # Get settings
+    logoSizesConfig = settings.get('logoSizes', {})
+    clippingEnabled = settings.get('clippingEnabled', False)
+    clippingPositions = settings.get('clippingPositions', {})
+    useExcelLogoSize = settings.get('useExcelLogoSize', False)
+    
     for idx, row in enumerate(rows, 1):
         if gui:
             gui.updateProgress(idx - 1, len(rows))
@@ -614,22 +620,27 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
         finalName = str(row.get("Final Image Name")).split(".jpg")[0]
         
         rLog = RowLogger(idx, finalName)
-        rLog.log(f"Processing row {idx}: {finalName}")
+        print(f"\n[Row {idx}/{len(rows)}] {finalName}")
+        rLog.log(f"Starting processing for: {finalName}")
         
         try:
+            # Step 1: Find product image
             candidates = findImageCandidates(imageRoot, supplierName, partId, color, locationName)
             if not candidates:
-                rLog.error("No image candidates")
+                errorMsg = f"Could not find product image for '{partId}' in color '{color}'"
+                rLog.error(errorMsg, reason="Check that the image exists in the Images folder")
                 if gui:
-                    gui.errorTracker.addError(idx, finalName, "No image candidates")
+                    gui.errorTracker.addError(idx, finalName, errorMsg)
                 failed += 1
                 continue
             
+            # Step 2: Find logo file
             logoPath = findLogo(logoRoot, decorationCode)
             if not logoPath:
-                rLog.error(f"Logo not found: {decorationCode}")
+                errorMsg = f"Could not find logo file '{decorationCode}'"
+                rLog.error(errorMsg, reason="Check that the logo file exists in the Logos folder")
                 if gui:
-                    gui.errorTracker.addError(idx, finalName, f"Logo not found: {decorationCode}")
+                    gui.errorTracker.addError(idx, finalName, errorMsg)
                 failed += 1
                 continue
             
@@ -643,13 +654,19 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
             detector = getDetector(garmentType)
             success = False
             
-            # Determine logo size
-            userSize = None
-            if settings.get('useExcelLogoSize') and customLogoSize:
-                userSize = parseCustomSize(customLogoSize)
-            if not userSize:
-                configSize = settings.get('logoSizes', {}).get(normalizeLocation(positions[0]), 99)
-                userSize = (configSize, configSize)
+            # Build per-position logo sizes
+            positionSizes = []
+            for pos in positions:
+                posNorm = normalizeLocation(pos)
+                # Check Excel first
+                if useExcelLogoSize and customLogoSize:
+                    parsed = parseCustomSize(customLogoSize)
+                    if parsed:
+                        positionSizes.append(parsed[0])
+                        continue
+                # Fallback to config - look for position in logoSizesConfig
+                size = logoSizesConfig.get(posNorm, 99)
+                positionSizes.append(size)
             
             for imgPath in candidates:
                 try:
@@ -674,19 +691,22 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                     if not valid:
                         continue
                     
-                    finalLogoDims = userSize if userSize else (99, 99)
-                    
                     if isCombo:
+                        # Pass per-position sizes for combo
                         ok = batchMgr.addCombo(
                             partId, imgPath, logoPath, f"{partId} {color}.jpg",
                             decorationCode, positions, coordinatesList, rotationsList,
-                            garmentType, finalLogoDims, finalName, activeHeight
+                            garmentType, positionSizes, finalName, activeHeight,
+                            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
                         )
                     else:
+                        # Single position - use first size
+                        singleSize = positionSizes[0] if positionSizes else 99
                         ok = batchMgr.addPair(
                             partId, imgPath, logoPath, f"{partId} {color}.jpg",
                             decorationCode, positions[0], coordinatesList[0], rotationsList[0],
-                            garmentType, finalLogoDims, finalName, activeHeight
+                            garmentType, singleSize, finalName, activeHeight,
+                            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
                         )
                     
                     if ok:
@@ -700,13 +720,15 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                     continue
             
             if not success:
-                rLog.error("All candidates failed")
+                errorMsg = f"Could not process any images for {partId}"
+                rLog.error(errorMsg, reason="The garment position may not be detected correctly")
                 if gui:
-                    gui.errorTracker.addError(idx, finalName, "All candidates failed")
+                    gui.errorTracker.addError(idx, finalName, errorMsg)
                 failed += 1
         
         except Exception as e:
-            rLog.error(f"Error: {e}")
+            errorMsg = f"Unexpected error processing row {idx}"
+            rLog.error(errorMsg, reason=str(e))
             if gui:
                 gui.errorTracker.addError(idx, finalName, str(e))
             failed += 1
@@ -723,3 +745,4 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
 if __name__ == "__main__":
     app = AutomationApp()
     app.mainloop()
+
