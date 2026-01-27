@@ -1,14 +1,57 @@
+"""
+Excel Reader Module
+Reads Excel files with flexible column name mapping from YAML configuration.
+"""
+
 import os
 import pandas as pd
 from core.config import MANDATORY_COLUMNS
 from core.utils import ensureFolder
 from .logger import logError
 
+# Import configuration loader
+try:
+    from configuration.configLoader import findColumnName, getColumnMapping
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
+
+
+# Internal field names mapped to legacy column names (fallback)
+INTERNAL_TO_LEGACY = {
+    'productId': 'Product ID',
+    'supplierName': 'Supplier Name',
+    'supplierPartId': 'Supplier Part ID',
+    'supplierColor': 'Supplier Color',
+    'decorationCode': 'Decoration Code',
+    'decorationLocation': 'Decoration Location',
+    'finalImageName': 'Final Image Name',
+    'customLogoSize': 'Custom Logo Size',
+}
+
+
+def _findColumn(dfColumns, internalName):
+    """Find the actual column name for an internal field name."""
+    # Try configuration-based mapping first
+    if CONFIG_AVAILABLE:
+        result = findColumnName(dfColumns, internalName)
+        if result:
+            return result
+    
+    # Fallback to legacy column name
+    legacyName = INTERNAL_TO_LEGACY.get(internalName)
+    if legacyName and legacyName in dfColumns:
+        return legacyName
+    
+    return None
+
 
 def readExcel(filePath):
     """
     Read Excel file by first converting to CSV to ensure stability.
-    Returns list of row dictionaries.
+    Uses YAML configuration for flexible column name mapping.
+    
+    Returns list of row dictionaries with LEGACY column names for backward compatibility.
     """
     try:
         # Create processed folder
@@ -22,45 +65,82 @@ def readExcel(filePath):
             csvPath = os.path.join(csvFolder, filename)
             
             # Read Excel
-            df_temp = pd.read_excel(filePath)
+            dfTemp = pd.read_excel(filePath)
             # Save to CSV
-            df_temp.to_csv(csvPath, index=False, encoding='utf-8-sig')
+            dfTemp.to_csv(csvPath, index=False, encoding='utf-8-sig')
             
             print(f"[INFO] Converted Excel to CSV: {csvPath}")
         else:
-            # Assume it's already CSV or compatible? 
-            # The prompt mainly talked about reading excel.
-            # If user selects CSV directly, we can use it, but logic says "When reading excel... convert".
             csvPath = filePath
 
         # 2. Read from CSV
         df = pd.read_csv(csvPath)
+        dfColumns = list(df.columns)
         
     except Exception as e:
         logError(f"Failed to read/convert Excel: {e}")
         print(f"[ERROR] Excel Read Failed: {e}")
         return []
 
+    # Build column mapping for this file
+    columnMap = {}
+    for internalName in INTERNAL_TO_LEGACY.keys():
+        foundCol = _findColumn(dfColumns, internalName)
+        if foundCol:
+            columnMap[internalName] = foundCol
+    
+    print(f"[INFO] Column mapping: {columnMap}")
+    
+    # Check mandatory columns
+    mandatoryInternal = ['productId', 'supplierPartId', 'supplierColor', 
+                         'decorationCode', 'decorationLocation', 'finalImageName', 'supplierName']
+    
+    missingMandatory = []
+    for internalName in mandatoryInternal:
+        if internalName not in columnMap:
+            missingMandatory.append(INTERNAL_TO_LEGACY.get(internalName, internalName))
+    
+    if missingMandatory:
+        logError(f"Missing mandatory columns in Excel: {', '.join(missingMandatory)}")
+        print(f"[ERROR] Missing mandatory columns: {missingMandatory}")
+        return []
+    
     rows = []
     for index, row in df.iterrows():
-        # Clean keys and values
-        # Check mandatory columns
-        missing = [col for col in MANDATORY_COLUMNS if col not in df.columns or pd.isna(row.get(col))]
+        # Check if mandatory values are present
+        missingValues = []
+        for internalName in mandatoryInternal:
+            colName = columnMap.get(internalName)
+            if colName:
+                value = row.get(colName)
+                if pd.isna(value) or str(value).strip() == '':
+                    missingValues.append(INTERNAL_TO_LEGACY.get(internalName, internalName))
         
-        # Note: If column is missing from DF entirely, row.get(col) might fail or just be nan. 
-        # Better check:
-        missing = []
-        for col in MANDATORY_COLUMNS:
-            if col not in df.columns:
-                missing.append(col)
-            elif pd.isna(row[col]):
-                missing.append(col)
-
-        if missing:
-            logError(f"Row {index+2} missing columns: {', '.join(missing)}")
+        if missingValues:
+            logError(f"Row {index+2} missing values for: {', '.join(missingValues)}")
             continue
 
-        rowData = {col: str(row[col]).strip() for col in df.columns}
+        # Build row data with LEGACY column names for backward compatibility
+        rowData = {}
+        for internalName, legacyName in INTERNAL_TO_LEGACY.items():
+            colName = columnMap.get(internalName)
+            if colName:
+                value = row.get(colName)
+                if pd.isna(value):
+                    rowData[legacyName] = ''
+                else:
+                    rowData[legacyName] = str(value).strip()
+            else:
+                rowData[legacyName] = ''
+        
+        # Also include any extra columns from the original file
+        for col in dfColumns:
+            if col not in columnMap.values():
+                value = row.get(col)
+                if not pd.isna(value):
+                    rowData[col] = str(value).strip()
+        
         rows.append(rowData)
 
+    print(f"[INFO] Successfully read {len(rows)} valid rows from Excel")
     return rows

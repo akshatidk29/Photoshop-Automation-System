@@ -366,3 +366,56 @@ def findImageCandidates(imageRoot, supplierName, partId, color, decorationLocati
             break
 
     return out
+
+
+def validateImageFolder(imageRoot):
+    """
+    Validate that the image folder exists and has proper structure.
+    
+    Args:
+        imageRoot: Path to check
+        
+    Returns:
+        Tuple of (isValid, message, details)
+    """
+    if not imageRoot:
+        return False, "No image folder specified", {}
+    
+    if not os.path.exists(imageRoot):
+        return False, f"Folder does not exist: {imageRoot}", {}
+    
+    if not os.path.isdir(imageRoot):
+        return False, f"Path is not a folder: {imageRoot}", {}
+    
+    # Count supplier folders
+    details = {
+        'supplierFolders': 0,
+        'totalImages': 0,
+        'suppliers': []
+    }
+    
+    try:
+        for item in os.listdir(imageRoot):
+            itemPath = os.path.join(imageRoot, item)
+            if os.path.isdir(itemPath):
+                details['supplierFolders'] += 1
+                details['suppliers'].append(item)
+                
+                # Count images in this supplier folder
+                for root, _, files in os.walk(itemPath):
+                    for f in files:
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in ALLOWED_EXTENSIONS:
+                            details['totalImages'] += 1
+    except Exception as e:
+        return False, f"Error reading folder: {e}", details
+    
+    if details['supplierFolders'] == 0:
+        return False, "No supplier folders found", details
+    
+    if details['totalImages'] == 0:
+        return False, "No image files found", details
+    
+    message = f"Found {details['supplierFolders']} suppliers with {details['totalImages']} images"
+    return True, message, details
+

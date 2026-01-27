@@ -18,7 +18,9 @@ LOGO_SETTINGS = {
 }
 
 PLACEMENT_CONFIG = {
-    # Add classes as they become known
+    "FRONT_ON_BAG": {"baseSize": 200, "align": "center"},
+    "ON_POCKET_ON_BAG": {"baseSize": 200, "align": "center"},
+    "FRONT_CENTER": {"baseSize": 200, "align": "center"},
 }
 
 # Default Model Path
@@ -35,7 +37,7 @@ if __name__ == "__main__":
     inferenceDir = currentFile.parent.parent # model/inference
     
     # Default Paths
-    testImageDir = inferenceDir / "inputs"
+    testImageDir = inferenceDir / "inputs" / "bag"
     outputDir = inferenceDir / "outputs" / "bag_test"
     logoPath = inferenceDir / "inputs" / "logo.png"
     
