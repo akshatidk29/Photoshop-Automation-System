@@ -35,7 +35,7 @@ try:
     from configuration.configLoader import (
         getAllLogoSizes, getDefaultLogoSize, updateLogoSize,
         getAllClippingPositions, isClippingEnabledGlobal,
-        updateClippingConfig
+        updateClippingConfig, getLogoSizeForPosition
     )
     CONFIG_AVAILABLE = True
 except ImportError:
@@ -1117,7 +1117,6 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
             # Build per-position logo sizes
             positionSizes = []
             for pos in positions:
-                posNorm = normalizeLocation(pos)
                 # Check Excel first
                 if useExcelLogoSize and customLogoSize:
                     parsed = parseCustomSize(customLogoSize)
@@ -1128,14 +1127,8 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                         else:
                             positionSizes.append(parsed)
                         continue
-                # Fallback to config - look for position in logoSizesConfig
-                # Need to normalize config keys too since normalizeLocation converts spaces to hyphens
-                size = 99  # Default
-                for configKey, configSize in logoSizesConfig.items():
-                    configKeyNorm = normalizeLocation(configKey)
-                    if configKeyNorm == posNorm:
-                        size = configSize
-                        break
+                # Fallback to config - use robust matching function
+                size = getLogoSizeForPosition(pos, logoSizesConfig) if CONFIG_AVAILABLE else 99
                 positionSizes.append(size)
             
             for imgPath in candidates:

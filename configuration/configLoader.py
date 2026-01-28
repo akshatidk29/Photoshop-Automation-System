@@ -165,6 +165,50 @@ def getAllLogoSizes():
     return config.get('positions', {})
 
 
+def _normalizePositionKey(pos):
+    """Normalize a position key for comparison - removes all formatting variations."""
+    import re
+    # Remove all non-alphanumeric characters and convert to uppercase
+    return re.sub(r'[^A-Z0-9]', '', str(pos).upper())
+
+
+def getLogoSizeForPosition(position, logoSizesDict=None):
+    """
+    Get logo size for a position with robust matching.
+    
+    Handles format variations:
+    - 'FRONT (ON BAG)' vs 'FRONT-(ON-BAG)' vs 'FRONT-ON-BAG'
+    - 'FRONT_CENTER' vs 'FRONT-CENTER'
+    - 'ON POCKET (ON BAG)' vs 'ON-POCKET-(ON-BAG)'
+    
+    Args:
+        position: Position name from Excel/comboParser (e.g., 'FRONT-(ON-BAG)')
+        logoSizesDict: Optional dict of position->size, defaults to getAllLogoSizes()
+    
+    Returns:
+        Size in pixels (int)
+    """
+    if logoSizesDict is None:
+        logoSizesDict = getAllLogoSizes()
+    
+    config = getLogoSizesConfig()
+    defaultSize = config.get('defaultSize', 99)
+    
+    if not position:
+        return defaultSize
+    
+    posNorm = _normalizePositionKey(position)
+    
+    # Try to find matching key
+    for configKey, configSize in logoSizesDict.items():
+        configKeyNorm = _normalizePositionKey(configKey)
+        if configKeyNorm == posNorm:
+            return configSize
+    
+    # No exact match found
+    return defaultSize
+
+
 def updateLogoSize(position, size):
     """Update the logo size for a specific position."""
     config = getLogoSizesConfig()
