@@ -333,7 +333,12 @@ def computeLogoSize(garmentType: str, logoPath: str, location: str) -> Tuple[flo
 
 
 def parseCustomSize(sizeText):
-    """Returns (width, height) if valid, else None."""
+    """Returns (width, height) tuple or single width value if valid, else None.
+    
+    Accepts formats like:
+    - "150x200" or "150 x 200" → (150.0, 200.0)
+    - "150" → 150.0 (width-only, height calculated by aspect ratio downstream)
+    """
     if not sizeText:
         return None
 
@@ -347,6 +352,9 @@ def parseCustomSize(sizeText):
         width = float(match[0])
         height = float(match[1])
         return width, height
+    elif len(match) == 1:
+        # Single number = width only
+        return float(match[0])
 
     return None
 

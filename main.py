@@ -113,8 +113,8 @@ class AutomationApp(ctk.CTk):
         
         # Default paths
         DEFAULT_EXCEL = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Sheet.xlsx"
-        DEFAULT_IMAGES = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Images"
-        DEFAULT_LOGOS = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\Logos"
+        DEFAULT_IMAGES = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\testing\Imges"
+        DEFAULT_LOGOS = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\testing\LOGOS"
         
         self.excelPath = DEFAULT_EXCEL if os.path.exists(DEFAULT_EXCEL) else None
         self.imageRoot = DEFAULT_IMAGES if os.path.exists(DEFAULT_IMAGES) else None
@@ -1121,11 +1121,21 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                 # Check Excel first
                 if useExcelLogoSize and customLogoSize:
                     parsed = parseCustomSize(customLogoSize)
-                    if parsed:
-                        positionSizes.append(parsed[0])
+                    if parsed is not None:
+                        # Handle both tuple (width, height) and single float (width-only)
+                        if isinstance(parsed, tuple):
+                            positionSizes.append(parsed[0])
+                        else:
+                            positionSizes.append(parsed)
                         continue
                 # Fallback to config - look for position in logoSizesConfig
-                size = logoSizesConfig.get(posNorm, 99)
+                # Need to normalize config keys too since normalizeLocation converts spaces to hyphens
+                size = 99  # Default
+                for configKey, configSize in logoSizesConfig.items():
+                    configKeyNorm = normalizeLocation(configKey)
+                    if configKeyNorm == posNorm:
+                        size = configSize
+                        break
                 positionSizes.append(size)
             
             for imgPath in candidates:
