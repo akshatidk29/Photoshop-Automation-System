@@ -1120,6 +1120,7 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                 # Check Excel first
                 if useExcelLogoSize and customLogoSize:
                     parsed = parseCustomSize(customLogoSize)
+                    print(f"    [DEBUG] Excel custom size: '{customLogoSize}' -> parsed: {parsed}")
                     if parsed is not None:
                         # Handle both tuple (width, height) and single float (width-only)
                         if isinstance(parsed, tuple):

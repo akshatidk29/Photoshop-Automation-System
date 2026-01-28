@@ -1,0 +1,127 @@
+# Position Aliases Configuration
+# ====================================
+# This file maps Excel position name variations to canonical position names.
+# When Excel has different names for the same position, add mappings here.
+#
+# HOW TO ADD NEW ALIASES:
+# 1. Find the Excel position name that isn't working (e.g., "BAG FRONT")
+# 2. The system will normalize it with hyphens (e.g., "BAG-FRONT")
+# 3. Add it under 'aliases' with the correct canonical name
+# 4. Save the file - changes take effect immediately
+#
+# FORMAT:
+#   aliases:
+#     "EXCEL-POSITION-NAME": "CANONICAL-POSITION-NAME"
+
+aliases:
+  # Bag position variations
+  BAG-FRONT: "FRONT (ON BAG)"
+  BAG-FRONT-SIDE: "FRONT (ON BAG)"
+  FRONT-ON-BAG: "FRONT (ON BAG)"
+  FRONT-BAG: "FRONT (ON BAG)"
+  FRONT-OF-BAG: "FRONT (ON BAG)"
+  
+  BAG-POCKET: "ON POCKET (ON BAG)"
+  POCKET-ON-BAG: "ON POCKET (ON BAG)"
+  ON-POCKET-ON-BAG: "ON POCKET (ON BAG)"
+  ON-POCKET-BAG: "ON POCKET (ON BAG)"
+  BAG-ON-POCKET: "ON POCKET (ON BAG)"
+  
+  # Cap position variations
+  CAP-FRONT: FRONT-CROWN
+  CAP-FRONT-CROWN: FRONT-CROWN
+  
+  # Towel position variations
+  CORNER-TOWEL: CORNER-ANGLED-TOWEL
+  TOWEL-CORNER: CORNER-ANGLED-TOWEL
+  ANGLED-TOWEL: CORNER-ANGLED-TOWEL
+  
+  # Center/Napkin variations
+  FRONT-CENTER: FRONT_CENTER
+  CENTER-FRONT: FRONT_CENTER
+  CENTER: FRONT_CENTER
+  
+  FRONT-NAPKIN: FRONT_NAPKIN
+  NAPKIN-FRONT: FRONT_NAPKIN
+  NAPKIN: FRONT_NAPKIN
+
+# Valid single positions (all canonical position names)
+# Add new positions here when supporting new product types
+validPositions:
+  # Garment positions
+  - FULL-BACK
+  - FULL-FRONT
+  - LEFT-BICEP
+  - RIGHT-BICEP
+  - LEFT-CHEST
+  - RIGHT-CHEST
+  - LEFT-COLLAR
+  - RIGHT-COLLAR
+  - LEFT-CUFF
+  - RIGHT-CUFF
+  - LEFT-HIP
+  - RIGHT-HIP
+  - LEFT-SLEEVE
+  - RIGHT-SLEEVE
+  - LEFT-THIGH-HIGH
+  - RIGHT-THIGH-HIGH
+  - ON-POCKET
+  - BACK-YOKE
+  
+  # Cap positions
+  - FRONT-CROWN
+  - CAP-BACK
+  - CAP-SIDE
+  - CAP-FRONT-SIDE
+  - LOWER-LEFT-CROWN
+  - LOWER-RIGHT-CROWN
+  
+  # Bag positions
+  - "FRONT (ON BAG)"
+  - "ON POCKET (ON BAG)"
+  
+  # Towel/Napkin positions
+  - CORNER-ANGLED-TOWEL
+  - FRONT_CENTER
+  - FRONT_NAPKIN
+
+# Combo position mappings (when multiple positions are combined)
+comboMappings:
+  "FULL-BACK & FULL-FRONT":
+    - FULL-BACK
+    - FULL-FRONT
+  FULL-FRONT-FULL-BACK:
+    - FULL-FRONT
+    - FULL-BACK
+  LEFT-BICEP-RIGHT-BICEP:
+    - LEFT-BICEP
+    - RIGHT-BICEP
+  LEFT-SLEEVE-RIGHT-SLEEVE:
+    - LEFT-SLEEVE
+    - RIGHT-SLEEVE
+  LEFT-CHEST-RIGHT-BICEP:
+    - LEFT-CHEST
+    - RIGHT-BICEP
+  LEFT-CHEST-RIGHT-SLEEVE:
+    - LEFT-CHEST
+    - RIGHT-SLEEVE
+  RIGHT-CHEST-LEFT-BICEP:
+    - RIGHT-CHEST
+    - LEFT-BICEP
+  RIGHT-CHEST-LEFT-SLEEVE:
+    - RIGHT-CHEST
+    - LEFT-SLEEVE
+  LEFT-CHEST-FULL-BACK:
+    - LEFT-CHEST
+    - FULL-BACK
+  RIGHT-CHEST-FULL-BACK:
+    - RIGHT-CHEST
+    - FULL-BACK
+  LEFT-CHEST-LEFT-BICEP-RIGHT-BICEP:
+    - LEFT-CHEST
+    - LEFT-BICEP
+    - RIGHT-BICEP
+  RIGHT-CHEST-LFT-BICEP-RIGHT-BICEP:
+    - RIGHT-CHEST
+    - LEFT-BICEP
+    - RIGHT-BICEP

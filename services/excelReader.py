@@ -4,10 +4,25 @@ Reads Excel files with flexible column name mapping from YAML configuration.
 """
 
 import os
+import re
 import pandas as pd
 from core.config import MANDATORY_COLUMNS
 from core.utils import ensureFolder
 from .logger import logError
+
+
+def _cleanValue(value):
+    """Clean control characters (like \\r from Windows Excel) from a value."""
+    if value is None:
+        return ''
+    if pd.isna(value):
+        return ''
+    s = str(value)
+    # Remove literal escape sequences like _x000d_ (openpyxl escape for \r)
+    s = re.sub(r'_x[0-9a-fA-F]{4}_', '', s)
+    # Remove actual control characters
+    s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
+    return s.strip()
 
 # Import configuration loader
 try:
@@ -129,7 +144,7 @@ def readExcel(filePath):
                 if pd.isna(value):
                     rowData[legacyName] = ''
                 else:
-                    rowData[legacyName] = str(value).strip()
+                    rowData[legacyName] = _cleanValue(value)
             else:
                 rowData[legacyName] = ''
         
@@ -138,7 +153,7 @@ def readExcel(filePath):
             if col not in columnMap.values():
                 value = row.get(col)
                 if not pd.isna(value):
-                    rowData[col] = str(value).strip()
+                    rowData[col] = _cleanValue(value)
         
         rows.append(rowData)
 
