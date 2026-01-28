@@ -75,20 +75,41 @@ def findColumnName(dfColumns, internalName):
     Returns:
         The matching column name from dfColumns, or None if not found
     """
+    import re
+    
+    # Clean column names by stripping control characters (like \r from Windows Excel)
+    def cleanName(name):
+        if name is None:
+            return ''
+        s = str(name)
+        # Remove literal escape sequences like _x000d_ (openpyxl escape for \r)
+        s = re.sub(r'_x[0-9a-fA-F]{4}_', '', s)
+        # Remove actual control characters
+        s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
+        return s.strip()
+    
+    # Build mapping of cleaned names to original names
+    cleanToOriginal = {cleanName(col): col for col in dfColumns}
+    cleanedColumns = list(cleanToOriginal.keys())
+    
     mapping = getColumnMapping()
     columns = mapping.get('columns', {})
     
     variations = columns.get(internalName, [])
     
+    # Try exact match with cleaned names
     for variation in variations:
-        if variation in dfColumns:
-            return variation
+        cleanVar = cleanName(variation)
+        if cleanVar in cleanedColumns:
+            return cleanToOriginal[cleanVar]
     
-    # Try case-insensitive match
-    dfColumnsLower = {col.lower(): col for col in dfColumns}
+    # Try case-insensitive match with cleaned names
+    cleanedColumnsLower = {col.lower(): col for col in cleanedColumns}
     for variation in variations:
-        if variation.lower() in dfColumnsLower:
-            return dfColumnsLower[variation.lower()]
+        cleanVarLower = cleanName(variation).lower()
+        if cleanVarLower in cleanedColumnsLower:
+            originalClean = cleanedColumnsLower[cleanVarLower]
+            return cleanToOriginal[originalClean]
     
     return None
 
@@ -349,6 +370,48 @@ def expandColorVariants(color):
                 variants.add(colorNorm.replace(fullNorm, abbrevNorm))
     
     return variants
+
+
+# ============================================================================
+# Position Aliases Functions
+# ============================================================================
+
+def getPositionAliasesConfig():
+    """Get the position aliases configuration."""
+    return _loadYaml('positionAliases.yaml')
+
+
+def getPositionAliases():
+    """Get position aliases dictionary - maps Excel variations to canonical names."""
+    config = getPositionAliasesConfig()
+    return config.get('aliases', {})
+
+
+def getValidPositions():
+    """Get set of all valid canonical position names."""
+    config = getPositionAliasesConfig()
+    return set(config.get('validPositions', []))
+
+
+def getComboMappings():
+    """Get combo position mappings - maps combined positions to their parts."""
+    config = getPositionAliasesConfig()
+    return config.get('comboMappings', {})
+
+
+def resolvePositionAlias(position):
+    """
+    Resolve a position name to its canonical form using aliases.
+    
+    Args:
+        position: Position name (possibly with variations)
+        
+    Returns:
+        Canonical position name
+    """
+    aliases = getPositionAliases()
+    normalized = str(position).strip().upper().replace(" ", "-")
+    return aliases.get(normalized, normalized)
 
 
 # ============================================================================
