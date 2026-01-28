@@ -1,0 +1,182 @@
+# Color Abbreviations/Aliases Configuration
+# ============================================
+# This file maps color abbreviations to their full names.
+# The system will use these to match images even when colors are abbreviated differently.
+#
+# HOW TO ADD NEW COLORS:
+# 1. Find the abbreviation used in your image filenames
+# 2. Add it under 'aliases' with the full color name(s) it should match
+# 3. Save the file - changes take effect immediately
+#
+# Format: abbreviation: [list of full names it should match]
+
+aliases:
+  # === Basic Colors ===
+  blk: [black]
+  wht: [white]
+  wt: [white]
+  rd: [red]
+  bl: [blue]
+  grn: [green]
+  gn: [green]
+  ylw: [yellow]
+  yl: [yellow]
+  or: [orange]
+  org: [orange]
+  pk: [pink]
+  pr: [purple]
+  pur: [purple]
+  brn: [brown]
+  br: [brown]
+  
+  # === Grey Variations ===
+  gry: [grey, gray]
+  gy: [grey, gray]
+  gr: [grey, gray]
+  
+  # === Navy Variations ===
+  nvy: [navy]
+  nv: [navy]
+  nay: [navy]
+  
+  # === Heather Variations ===
+  hthr: [heather]
+  ht: [heather]
+  htr: [heather]
+  
+  # === Steel/Metal Colors ===
+  stl: [steel]
+  st: [steel]
+  gystl: [grey steel, greysteel, gray steel]
+  gyst: [grey steel, greysteel]
+  
+  # === Common Color Combinations ===
+  # Flame Red
+  frd: [flame red, flamered]
+  flmrd: [flame red, flamered]
+  flame: [flame red]
+  
+  # True Navy
+  trny: [true navy, truenavy]
+  trnv: [true navy, truenavy]
+  trnvy: [true navy, truenavy]
+  
+  # True Red
+  trrd: [true red, truered]
+  
+  # Rich Navy
+  riny: [rich navy, richnavy]
+  richnvy: [rich navy, richnavy]
+  rcnvy: [rich navy, richnavy]
+  
+  # Patriot Blue
+  patbl: [patriot blue, patriotblue]
+  pabl: [patriot blue, patriotblue]
+  
+  # True Khaki
+  trkh: [true khaki, truekhaki]
+  trkhk: [true khaki, truekhaki]
+  
+  # Light Khaki
+  ltkhk: [light khaki, lightkhaki]
+  ltkh: [light khaki, lightkhaki]
+  
+  # === Dark/Light Prefixes ===
+  dk: [dark]
+  drk: [dark]
+  lt: [light]
+  lgt: [light]
+  
+  # Dark Charcoal
+  dkchar: [dark charcoal, darkcharcoal]
+  dkch: [dark charcoal, darkcharcoal]
+  char: [charcoal]
+  
+  # === Nature Colors ===
+  # Olive Drab
+  ovdrb: [olive drab, olivedrab]
+  ovdrbgrn: [olive drab green, olivedrabgreen]
+  olv: [olive]
+  
+  # Woodland
+  wdlnd: [woodland]
+  wdld: [woodland]
+  
+  # Coyote Brown
+  coyote: [coyote brown, coyotebrown]
+  coy: [coyote]
+  
+  # Forest Green
+  frgrn: [forest green, forestgreen]
+  frstgrn: [forest green]
+  
+  # === Special Colors ===
+  # Gusty Grey
+  gusty: [gusty grey, gustygrey, gusty gray]
+  gustgy: [gusty grey, gustygrey]
+  gust: [gusty]
+  
+  # Shock Blue
+  shock: [shock blue, shockblue]
+  shck: [shock blue]
+  
+  # Chili Red
+  chili: [chili red, chilired]
+  chl: [chili]
+  
+  # Midnight
+  mdnt: [midnight]
+  mid: [midnight]
+  
+  # Athletic
+  ath: [athletic]
+  athl: [athletic]
+  
+  # Heather combinations
+  hthrgry: [heather grey, heathergrey, heather gray]
+  htgry: [heather grey, heathergrey]
+  
+  # === Royal/Maroon ===
+  ryl: [royal]
+  ry: [royal]
+  mar: [maroon]
+  mrn: [maroon]
+  
+  # === Camo ===
+  camo: [camouflage, camo]
+  cam: [camouflage, camo]
+  
+  # === Tan/Khaki ===
+  tan: [tan]
+  khk: [khaki]
+  kh: [khaki]
+  khaki: [khaki]
+  
+  # === Coffee/Chocolate ===
+  cof: [coffee]
+  choc: [chocolate]
+  
+  # === Texas Orange ===
+  txorg: [texas orange, texasorange]
+  txor: [texas orange]
+
+# Compound color parts (for multi-word colors in filenames)
+# These are used when colors are joined without spaces
+compoundParts:
+  - grey
+  - gray
+  - steel
+  - blue
+  - red
+  - green
+  - white
+  - black
+  - navy
+  - khaki
+  - brown
+  - heather
+  - charcoal
+  - orange
+  - purple
+  - pink
+  - yellow

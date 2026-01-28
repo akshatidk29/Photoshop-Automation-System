@@ -1,67 +1,39 @@
+"""
+Image Locator Module
+Finds product images with robust color matching and front/back selection.
+Uses YAML configuration for flexible, user-editable matching rules.
+"""
+
 import os
 import re
 import json
 import difflib
 from services.logger import logError
 
-# Allowed image file extensions
-ALLOWED_EXTENSIONS = (".jpg",)
+# Import configuration loaders
+try:
+    from configuration.configLoader import (
+        getColorAliases, expandColorVariants, getPositionType,
+        getIgnoreWords, getFrontIndicators, getBackIndicators, 
+        getSideIndicators, getAllowedExtensions
+    )
+    CONFIG_AVAILABLE = True
+except ImportError:
+    CONFIG_AVAILABLE = False
 
-# Location sets for front/back classification
-FRONT_LOCATIONS = {
-    "full-front", "left-bicep", "right-bicep", "left-chest", "right-chest",
-    "left-collar", "right-collar", "left-cuff", "right-cuff",
-    "left-hip", "right-hip", "left-sleeve", "right-sleeve",
-    "left-thigh-high", "right-thigh-high", "on-pocket",
-    "left-bicep-right-bicep",
-    "left-chest-left-bicep-right-bicep",
-    "left-chest-right-bicep",
-    "left-chest-right-sleeve",
-    "left-sleeve-right-sleeve",
-    "right-chest-left-bicep",
-    "right-chest-left-sleeve",
-    "right-chest-lft-bicep-right-bicep"
-}
-
-BACK_LOCATIONS = {
-    "full-back",
-    "back-yoke"
-}
-
-BOTH_LOCATIONS = {
-    "full-back & full-front"
-}
-
-# Words to ignore when matching filenames
-IGNORE_FILENAME_WORDS = {
-    "flat", "model", "side", "form", "front", "back", "rear",
-    "cap", "hat", "main", "temp", "folded",
-    "-1200w", "1030x1030", "front1", "front2", "front3",
-    "back1", "back2", "back3", "back4",
-    "psb", "ga", "inside", "interior", "sticker",
-    "- copy", "modelfront", "modelback"
-}
-
-# Color abbreviation mappings
-COLOR_ALIASES = {
-    "gry": ["grey", "gray"],
-    "blk": ["black"],
-    "wht": ["white"],
-    "bl": ["blue"],
-    "rd": ["red"],
-    "grn": ["green"],
-    "nv": ["navy"],
-    "nvy": ["navy"],
-    "ht": ["heather"],
-    "hthr": ["heather"],
-    "ath": ["athletic"],
-    "pk": ["pink"],
-    "pr": ["purple"],
-    "brn": ["brown"],
-    "ylw": ["yellow"],
-    "or": ["orange"],
-    "char": ["charcoal"]
-}
+# Fallback constants if config not available
+if not CONFIG_AVAILABLE:
+    ALLOWED_EXTENSIONS = (".jpg",)
+    IGNORE_WORDS = ["flat", "model", "form", "temp", "folded", "1200w", "copy"]
+    FRONT_INDICATORS = ["front", "fullfront", "flatfront"]
+    BACK_INDICATORS = ["back", "fullback", "flatback", "rear"]
+    SIDE_INDICATORS = ["side", "straight"]
+else:
+    ALLOWED_EXTENSIONS = tuple(getAllowedExtensions())
+    IGNORE_WORDS = getIgnoreWords()
+    FRONT_INDICATORS = getFrontIndicators()
+    BACK_INDICATORS = getBackIndicators()
+    SIDE_INDICATORS = getSideIndicators()
 
 # In-memory image index
 _imageIndex = None
@@ -78,35 +50,46 @@ def normalize(text: str) -> str:
 def cleanFilename(name: str) -> str:
     """Clean filename by removing ignore words."""
     base = normalize(name)
-    for word in IGNORE_FILENAME_WORDS:
+    for word in IGNORE_WORDS:
         base = base.replace(normalize(word), "")
     return base
 
 
-def expandColorVariants(color: str):
-    """Generate color name variants for matching."""
+def getColorVariants(color: str) -> set:
+    """Generate all color name variants for matching."""
+    if CONFIG_AVAILABLE:
+        return expandColorVariants(color)
+    
+    # Fallback basic expansion
     base = normalize(color)
     variants = {base}
-
-    for short, fulls in COLOR_ALIASES.items():
+    # Basic hardcoded aliases
+    basicAliases = {
+        "blk": ["black"], "wht": ["white"], "gry": ["grey", "gray"],
+        "nvy": ["navy"], "rd": ["red"], "grn": ["green"]
+    }
+    for short, fulls in basicAliases.items():
         for full in fulls:
             if full in base:
                 variants.add(base.replace(full, short))
             if short in base:
                 variants.add(base.replace(short, full))
-
     return variants
 
 
-def resolveLocationType(location: str) -> str:
-    """Determine if location is front, back, or side."""
+def resolvePositionType(location: str) -> str:
+    """Determine if location requires front, back, dual, or side image."""
+    if CONFIG_AVAILABLE:
+        return getPositionType(location)
+    
+    # Fallback to basic detection
     if not location:
         return "front"
-
     loc = location.strip().lower()
-    for b in BACK_LOCATIONS:
-        if b in loc:
-            return "back"
+    if "full-back" in loc and "full-front" in loc:
+        return "dual"
+    if "back" in loc:
+        return "back"
     return "front"
 
 
@@ -129,9 +112,8 @@ def _ensureIndex(imageRoot):
                     continue
                 full = os.path.join(r, f)
                 cleaned = cleanFilename(name)
-                basename = f
-                _indexEntries.append({'path': full, 'basename': basename, 'cleaned': cleaned})
-                key = basename.lower()
+                _indexEntries.append({'path': full, 'basename': f, 'cleaned': cleaned})
+                key = f.lower()
                 _indexByBasename.setdefault(key, []).append(full)
         _imageIndex = True
     except Exception as e:
@@ -196,48 +178,6 @@ def resolveSupplierFolder(imageRoot, supplierName):
     return None
 
 
-def exactImageMatch(imageRoot, supplierName, partId, color):
-    """Try exact match for image file."""
-    if not supplierName or not partId or not color:
-        return None
-    target = f"{partId} {color}.jpg"
-    supplierFolder = os.path.join(imageRoot, supplierName)
-
-    # Quick direct path check
-    direct = os.path.join(supplierFolder, target)
-    if os.path.exists(direct):
-        return direct
-
-    # Use index if available
-    try:
-        _ensureIndex(imageRoot)
-        paths = _indexByBasename.get(target.lower())
-        if paths:
-            for p in paths:
-                if supplierFolder and os.path.commonpath([supplierFolder, p]) == supplierFolder:
-                    return p
-            return paths[0]
-    except Exception:
-        pass
-
-    # Fallback to directory walk
-    if os.path.isdir(supplierFolder):
-        for root, _, files in os.walk(supplierFolder):
-            if target in files:
-                return os.path.join(root, target)
-
-    partFolder = os.path.join(supplierFolder, partId)
-    if os.path.isdir(partFolder):
-        direct = os.path.join(partFolder, target)
-        if os.path.exists(direct):
-            return direct
-        for root, _, files in os.walk(partFolder):
-            if target in files:
-                return os.path.join(root, target)
-
-    return None
-
-
 def buildPattern(partId, color):
     """Build regex pattern for matching image files."""
     part = normalize(partId)
@@ -274,6 +214,95 @@ def collectMatches(root, pattern):
         return matches
 
 
+def classifyImage(imgPath):
+    """Classify an image as front, back, or side based on filename."""
+    lname = os.path.basename(imgPath).lower()
+    
+    # Check back indicators first (more specific)
+    for indicator in BACK_INDICATORS:
+        if indicator in lname:
+            return "back"
+    
+    # Check front indicators
+    for indicator in FRONT_INDICATORS:
+        if indicator in lname:
+            return "front"
+    
+    # Check side indicators
+    for indicator in SIDE_INDICATORS:
+        if indicator in lname:
+            return "side"
+    
+    # Check parent folder name for back subfolder
+    parentDir = os.path.basename(os.path.dirname(imgPath)).lower()
+    if parentDir == "back":
+        return "back"
+    if parentDir == "front":
+        return "front"
+    
+    # Default to front
+    return "front"
+
+
+def scoreImage(imgPath, color, positionType):
+    """
+    Score an image for matching quality.
+    Higher score = better match.
+    """
+    name = os.path.splitext(os.path.basename(imgPath))[0]
+    cleaned = cleanFilename(name)
+    lname = os.path.basename(imgPath).lower()
+    
+    # Color matching score (0-1)
+    colorVariants = getColorVariants(color)
+    colorScore = 0.0
+    for variant in colorVariants:
+        if variant and variant in cleaned:
+            colorScore = 1.0
+            break
+    if colorScore == 0:
+        # Fuzzy match
+        colorNorm = normalize(color)
+        colorScore = difflib.SequenceMatcher(None, colorNorm, cleaned).ratio()
+    
+    # Position type matching score - CRITICAL for correct selection
+    imageType = classifyImage(imgPath)
+    positionScore = 0.0
+    
+    if positionType == "back":
+        if imageType == "back":
+            positionScore = 2.0  # Strong match
+        elif imageType == "front":
+            positionScore = -3.0  # HEAVILY penalize wrong type
+        else:
+            positionScore = -1.0  # Side is also wrong for back
+    
+    elif positionType == "front":
+        if imageType == "front":
+            positionScore = 2.0  # Strong match
+        elif imageType == "back":
+            positionScore = -3.0  # HEAVILY penalize wrong type
+        else:
+            positionScore = 0.0  # Side is acceptable for front
+    
+    elif positionType == "dual":
+        # Dual positions prefer front, but back is also acceptable
+        if imageType == "front":
+            positionScore = 1.0
+        elif imageType == "back":
+            positionScore = 0.5
+    
+    # Penalize flat/model views
+    if "flat" in lname:
+        positionScore -= 0.8
+    if "model" in lname:
+        positionScore -= 0.3
+    if "folded" in lname:
+        positionScore -= 0.5
+    
+    return colorScore + positionScore
+
+
 def findImage(imageRoot, supplierName, partId, color, decorationLocation):
     """Find single best matching image."""
     candidates = findImageCandidates(imageRoot, supplierName, partId, color, decorationLocation)
@@ -281,8 +310,11 @@ def findImage(imageRoot, supplierName, partId, color, decorationLocation):
 
 
 def findImageCandidates(imageRoot, supplierName, partId, color, decorationLocation, maxCandidates=6):
-    """Return ordered list of candidate image paths (best-first)."""
-    locationType = resolveLocationType(decorationLocation)
+    """
+    Return ordered list of candidate image paths (best-first).
+    Uses YAML configuration for robust matching.
+    """
+    positionType = resolvePositionType(decorationLocation)
     pattern = buildPattern(partId, color)
 
     supplierFolder = resolveSupplierFolder(imageRoot, supplierName)
@@ -291,81 +323,77 @@ def findImageCandidates(imageRoot, supplierName, partId, color, decorationLocati
         logError(f"Supplier folder not found: {supplierName} (root={imageRoot})")
         return []
 
+    # Try to find part folder (could be direct or nested)
     partFolder = os.path.join(supplierFolder, partId)
+    if not os.path.isdir(partFolder):
+        # Try case-insensitive match
+        try:
+            subfolders = os.listdir(supplierFolder)
+            for sf in subfolders:
+                if normalize(sf) == normalize(partId):
+                    partFolder = os.path.join(supplierFolder, sf)
+                    break
+        except Exception:
+            pass
+    
     if not os.path.isdir(partFolder):
         logError(f"Part folder not found: {partId} under supplier {supplierName}")
         return []
 
-    allMatches = collectMatches(partFolder, pattern)
+    # Check for back subfolder if looking for back images
+    searchFolder = partFolder
+    if positionType == "back":
+        backFolder = os.path.join(partFolder, "back")
+        if os.path.isdir(backFolder):
+            # First try back subfolder only
+            allMatches = collectMatches(backFolder, pattern)
+            if allMatches:
+                searchFolder = backFolder
+                print(f"[INFO] Using 'back' subfolder for back position")
+            else:
+                allMatches = collectMatches(partFolder, pattern)
+        else:
+            allMatches = collectMatches(partFolder, pattern)
+    else:
+        allMatches = collectMatches(partFolder, pattern)
     
     if not allMatches:
         logError(f"Image not found | PartID={partId}, Color={color}, Supplier={supplierName}")
         return []
 
-    # Scoring function for color similarity and location boosts
-    def score(imgPath):
-        name = os.path.splitext(os.path.basename(imgPath))[0]
-        cleaned = cleanFilename(name)
-        c = normalize(color)
-        if c and c in cleaned:
-            base = 1.0
-        else:
-            base = difflib.SequenceMatcher(None, c, cleaned).ratio()
-
-        lname = os.path.basename(imgPath).lower()
-        if "front" in lname and "back" not in lname:
-            base += 0.15
-        if "back" in lname:
-            base -= 0.15
-        if "side" in lname:
-            base -= 0.15
-        if "flat" in lname:
-            base -= 0.80
-        return base
-
-    front, back, side = [], [], []
-    for img in allMatches:
-        lname = img.lower()
-        if "back" in lname:
-            back.append(img)
-        elif "side" in lname:
-            side.append(img)
-        elif "front" in lname:
-            front.append(img)
-        else:
-            front.append(img)
-
-    def orderedList(lst):
-        return [i for _, i in sorted(((score(i), i) for i in lst), key=lambda x: x[0], reverse=True)]
-
+    # Score and sort all matches
+    scoredMatches = []
+    for imgPath in allMatches:
+        score = scoreImage(imgPath, color, positionType)
+        imgType = classifyImage(imgPath)
+        scoredMatches.append((score, imgPath, imgType))
+    
+    # Sort by score (highest first)
+    scoredMatches.sort(key=lambda x: x[0], reverse=True)
+    
+    # Build final candidate list
     candidates = []
-    if locationType == "front":
-        candidates.extend(orderedList(front))
-        candidates.extend(orderedList(side))
-        candidates.extend(orderedList(back))
-    elif locationType == "back":
-        candidates.extend(orderedList(front))
-        candidates.extend(orderedList(side))
-        candidates.extend(orderedList(back))
-    else:
-        candidates.extend(orderedList(front))
-        candidates.extend(orderedList(side))
-        candidates.extend(orderedList(back))
-
-    if not candidates:
-        candidates = orderedList(allMatches)
-
-    # Deduplicate and limit
     seen = set()
-    out = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            out.append(c)
-        if len(out) >= maxCandidates:
+    
+    for score, imgPath, imgType in scoredMatches:
+        if imgPath not in seen:
+            seen.add(imgPath)
+            candidates.append(imgPath)
+            
+            # Log the selection
+            if len(candidates) == 1:
+                print(f"[INFO] Best image match: {os.path.basename(imgPath)} (type={imgType}, score={score:.2f})")
+        
+        if len(candidates) >= maxCandidates:
             break
 
-    return out
+    # Safety check: for back positions, verify we have a back image
+    if positionType == "back" and candidates:
+        firstType = classifyImage(candidates[0])
+        if firstType != "back":
+            print(f"[WARNING] No back image found for back position, using: {os.path.basename(candidates[0])}")
+    
+    return candidates
 
 
 def validateImageFolder(imageRoot):
@@ -418,4 +446,3 @@ def validateImageFolder(imageRoot):
     
     message = f"Found {details['supplierFolders']} suppliers with {details['totalImages']} images"
     return True, message, details
-

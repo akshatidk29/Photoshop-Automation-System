@@ -117,15 +117,32 @@ def normalizeLocation(locationName):
     return normalized 
 
 
-def detectGarmentTypeFromLocation(locationName):
+def detectGarmentTypeFromLocation(locationName, partId=None):
     """
     Returns category: T-SHIRT (includes Dual), CAP, BAG, BLANKET
+    Uses YAML configuration if available, with fallback to hardcoded logic.
     """
-    # Normalize first
+    # Try YAML-based detection first
+    try:
+        from configuration.configLoader import detectGarmentType
+        return detectGarmentType(locationName, partId)
+    except ImportError:
+        pass
+    
+    # Fallback to hardcoded logic
     loc = normalizeLocation(locationName)
+    partIdUpper = str(partId).upper() if partId else ""
+    
+    # Check by part ID prefix first (more reliable)
+    if partIdUpper.startswith("BG"):
+        return "BAG"
+    if partIdUpper.startswith("C") or partIdUpper.startswith("CP"):
+        return "CAP"
+    if partIdUpper.startswith("BP"):
+        return "BLANKET"
     
     # Bag
-    if "BAG" in loc:
+    if "BAG" in loc or "FRONT_CENTER" in loc:
         return "BAG"
         
     # Cap
@@ -133,7 +150,7 @@ def detectGarmentTypeFromLocation(locationName):
         return "CAP"
         
     # Towel/Blanket
-    if "TOWEL" in loc or "FRONT_CENTER" == loc: # FRONT_CENTER is Towel in user list
+    if "TOWEL" in loc  or "NAPKIN" in loc:
         return "BLANKET"
         
     # Default to T-SHIRT (Garments)

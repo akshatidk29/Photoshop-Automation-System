@@ -252,3 +252,220 @@ def updateClippingConfig(globalEnabled, positionsDict):
     config['clippingEnabled'] = globalEnabled
     config['positions'] = positionsDict
     return _saveYaml('clippingPositions.yaml', config)
+
+
+# ============================================================================
+# Color Aliases Functions
+# ============================================================================
+
+def getColorAliases():
+    """Get color alias configuration as a dictionary."""
+    config = _loadYaml('colorAliases.yaml')
+    return config.get('aliases', {})
+
+
+def getCompoundColorParts():
+    """Get compound color parts for splitting joined colors."""
+    config = _loadYaml('colorAliases.yaml')
+    return config.get('compoundParts', [])
+
+
+def expandColorVariants(color):
+    """
+    Generate all color name variants for matching.
+    Uses YAML configuration for comprehensive matching.
+    
+    Args:
+        color: The color string to expand
+        
+    Returns:
+        Set of all possible variants of this color
+    """
+    import re
+    aliases = getColorAliases()
+    
+    # Normalize input
+    colorNorm = re.sub(r'[^a-z0-9]', '', str(color).lower())
+    variants = {colorNorm}
+    
+    # Add all alias expansions (bidirectional)
+    for abbrev, fulls in aliases.items():
+        abbrevNorm = re.sub(r'[^a-z0-9]', '', abbrev.lower())
+        
+        # If color contains the abbreviation, add full versions
+        if abbrevNorm in colorNorm:
+            for full in fulls:
+                fullNorm = re.sub(r'[^a-z0-9]', '', full.lower())
+                variants.add(colorNorm.replace(abbrevNorm, fullNorm))
+        
+        # If color contains any full version, add abbreviation
+        for full in fulls:
+            fullNorm = re.sub(r'[^a-z0-9]', '', full.lower())
+            if fullNorm in colorNorm:
+                variants.add(colorNorm.replace(fullNorm, abbrevNorm))
+    
+    return variants
+
+
+# ============================================================================
+# Position Type Functions
+# ============================================================================
+
+def getPositionTypesConfig():
+    """Get position types configuration."""
+    return _loadYaml('positionTypes.yaml')
+
+
+def getPositionType(position):
+    """
+    Return 'front', 'back', 'dual', or 'side' for a position.
+    
+    Args:
+        position: Position name (e.g., 'LEFT-CHEST', 'FULL-BACK')
+        
+    Returns:
+        String: 'front', 'back', 'dual', or 'side'
+    """
+    config = getPositionTypesConfig()
+    
+    # Normalize position name
+    posNorm = str(position).strip().upper().replace(' ', '-').replace('_', '-')
+    
+    # Check back positions
+    backPositions = config.get('backPositions', [])
+    for bp in backPositions:
+        bpNorm = bp.upper().replace(' ', '-').replace('_', '-')
+        if bpNorm == posNorm or bpNorm in posNorm:
+            return 'back'
+    
+    # Check dual positions
+    dualPositions = config.get('dualPositions', [])
+    for dp in dualPositions:
+        dpNorm = dp.upper().replace(' ', '-').replace('_', '-').replace('&', '-')
+        if dpNorm == posNorm or dpNorm in posNorm:
+            return 'dual'
+    
+    # Check side positions
+    sidePositions = config.get('sidePositions', [])
+    for sp in sidePositions:
+        spNorm = sp.upper().replace(' ', '-').replace('_', '-')
+        if spNorm == posNorm or spNorm in posNorm:
+            return 'side'
+    
+    # Default to front
+    return 'front'
+
+
+def getFrontPositions():
+    """Get list of front-facing positions."""
+    config = getPositionTypesConfig()
+    return config.get('frontPositions', [])
+
+
+def getBackPositions():
+    """Get list of back-facing positions."""
+    config = getPositionTypesConfig()
+    return config.get('backPositions', [])
+
+
+def getDualPositions():
+    """Get list of dual-image positions."""
+    config = getPositionTypesConfig()
+    return config.get('dualPositions', [])
+
+
+# ============================================================================
+# Garment Type Functions
+# ============================================================================
+
+def getGarmentTypesConfig():
+    """Get garment types configuration."""
+    return _loadYaml('garmentTypes.yaml')
+
+
+def detectGarmentType(position, partId=None):
+    """
+    Detect garment type from position keywords or part ID prefix.
+    
+    Args:
+        position: Position/location name
+        partId: Optional part ID to check prefix
+        
+    Returns:
+        String: 'T-SHIRT', 'CAP', 'BAG', or 'BLANKET'
+    """
+    config = getGarmentTypesConfig()
+    rules = config.get('detectionRules', {})
+    
+    posNorm = str(position).upper() if position else ''
+    partIdNorm = str(partId).upper() if partId else ''
+    
+    # Check each garment type (except T-SHIRT which is default)
+    for gType in ['CAP', 'BAG', 'BLANKET']:
+        rule = rules.get(gType, {})
+        
+        # Check keywords in position
+        for keyword in rule.get('keywords', []):
+            if keyword.upper() in posNorm:
+                return gType
+        
+        # Check part ID prefix
+        for prefix in rule.get('prefixes', []):
+            if partIdNorm.startswith(prefix.upper()):
+                return gType
+    
+    # Default to T-SHIRT
+    return 'T-SHIRT'
+
+
+def getTypeAliases():
+    """Get garment type aliases."""
+    config = getGarmentTypesConfig()
+    return config.get('typeAliases', {})
+
+
+# ============================================================================
+# Filename Pattern Functions
+# ============================================================================
+
+def getFilenamePatternsConfig():
+    """Get filename patterns configuration."""
+    return _loadYaml('filenamePatterns.yaml')
+
+
+def getIgnoreWords():
+    """Get list of words to ignore in filenames."""
+    config = getFilenamePatternsConfig()
+    return [w.lower() for w in config.get('ignoreWords', [])]
+
+
+def getFrontIndicators():
+    """Get list of front image indicators."""
+    config = getFilenamePatternsConfig()
+    return [w.lower() for w in config.get('frontIndicators', [])]
+
+
+def getBackIndicators():
+    """Get list of back image indicators."""
+    config = getFilenamePatternsConfig()
+    return [w.lower() for w in config.get('backIndicators', [])]
+
+
+def getSideIndicators():
+    """Get list of side image indicators."""
+    config = getFilenamePatternsConfig()
+    return [w.lower() for w in config.get('sideIndicators', [])]
+
+
+def getAllowedExtensions():
+    """Get list of allowed image file extensions."""
+    config = getFilenamePatternsConfig()
+    exts = config.get('allowedExtensions', ['jpg', 'jpeg', 'png'])
+    return ['.' + e.lower().lstrip('.') for e in exts]
+
+
+def getViewPriority():
+    """Get view type priority for image selection."""
+    config = getFilenamePatternsConfig()
+    return config.get('viewPriority', {'front': 1, 'back': 2, 'side': 3})
+

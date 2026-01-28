@@ -1,0 +1,63 @@
+# Position Type Classification
+# ====================================
+# This file defines which positions require FRONT images vs BACK images.
+# The system uses this to select the correct image type.
+#
+# HOW TO ADD NEW POSITIONS:
+# 1. Determine if the position is on the front, back, or both sides
+# 2. Add it to the appropriate list below
+# 3. Save the file - changes take effect immediately
+
+# Positions that require FRONT-facing images
+frontPositions:
+  # Garment front positions
+  - FULL-FRONT
+  - LEFT-CHEST
+  - RIGHT-CHEST
+  - LEFT-BICEP
+  - RIGHT-BICEP
+  - LEFT-SLEEVE
+  - RIGHT-SLEEVE
+  - LEFT-COLLAR
+  - RIGHT-COLLAR
+  - LEFT-CUFF
+  - RIGHT-CUFF
+  - LEFT-HIP
+  - RIGHT-HIP
+  - LEFT-THIGH-HIGH
+  - RIGHT-THIGH-HIGH
+  - ON-POCKET
+  
+  # Cap front positions
+  - FRONT-CROWN
+  - CAP-FRONT-SIDE
+  - LOWER-LEFT-CROWN
+  - LOWER-RIGHT-CROWN
+  
+  # Bag front positions
+  - FRONT (ON BAG)
+  - ON POCKET (ON BAG)
+  
+  # Towel/Napkin positions
+  - FRONT_CENTER
+  - FRONT_NAPKIN
+  - CORNER-ANGLED-TOWEL
+
+# Positions that require BACK-facing images
+backPositions:
+  - FULL-BACK
+  - BACK-YOKE
+  - CAP-BACK
+
+# Positions that need BOTH front and back images (dual-image compositions)
+# These will look for both a front AND back image
+dualPositions:
+  - FULL-BACK-FULL-FRONT
+  - FULL-FRONT-FULL-BACK
+  - LEFT-CHEST-FULL-BACK
+  - RIGHT-CHEST-FULL-BACK
+  - FULL-BACK & FULL-FRONT
+
+# Side positions (less common, treated as front by default)
+sidePositions:
+  - CAP-SIDE

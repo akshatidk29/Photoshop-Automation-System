@@ -1,16 +1,26 @@
+# Core dependencies
 pandas
 openpyxl
 opencv-python
-mediapipe==0.10.9
-PyMuPDF
 pywin32
-pdf2image
 pillow
-PyPDF2
 pyyaml
-
-ultralytics
-opencv-python
 numpy
+
+# PDF handling
+PyMuPDF
+pdf2image
+PyPDF2
+
+# Machine Learning
+ultralytics
+onnxruntime
+mediapipe==0.10.9
+
+# UI
+customtkinter
+
+# Utilities
 matplotlib
 tqdm
+rembg

@@ -644,8 +644,8 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                 failed += 1
                 continue
             
-            garmentType = detectGarmentTypeFromLocation(locationName)
-            activeHeight = canvasHeight if garmentType == "T-SHIRT" else 1200
+            garmentType = detectGarmentTypeFromLocation(locationName, partId)
+            activeHeight = canvasHeight  # Always use user's GUI selection
             
             positions = parseComboPosition(locationName)
             positions.sort()

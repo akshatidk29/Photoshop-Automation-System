@@ -10,6 +10,19 @@ from core.utils import computeLogoSize, parseCustomSize
 from PIL import Image
 
 
+# Global Photoshop app instance for faster COM calls
+_psApp = None
+
+
+def _getPhotoshopApp():
+    """Get or create singleton Photoshop app instance."""
+    global _psApp
+    if _psApp is None:
+        _psApp = win32com.client.Dispatch("Photoshop.Application")
+        _psApp.Visible = True
+    return _psApp
+
+
 def rotateLogo(logoPath, angle, target_size=None):
     """Rotate logo image by specified angle, handling PDFs."""
     from pathlib import Path
@@ -127,8 +140,7 @@ def preparePairDoc(imagePath, logoPath, locationName, coordinates, rotation,
         clippingPositions: Dict of position -> bool for per-position clipping
     """
     try:
-        app = win32com.client.Dispatch("Photoshop.Application")
-        app.Visible = True
+        app = _getPhotoshopApp()
         location = str(locationName).strip().upper().replace(" ", "-")
 
         # Determine if we should clip based on GUI settings
@@ -281,8 +293,7 @@ def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rot
         customLogoSizes: Can be a list of sizes (one per position) or a single size value
     """
     try:
-        app = win32com.client.Dispatch("Photoshop.Application")
-        app.Visible = True
+        app = _getPhotoshopApp()
 
         doc = app.Open(imagePath)
         
