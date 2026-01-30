@@ -104,3 +104,11 @@ class RowLogger:
         with open(self.filePath, "a", encoding="utf-8") as f:
             f.write(line + "\n")
         print(f"    ⚠ {message}")
+
+    def fallback(self, message, fallbackUsed):
+        """Log when a fallback option was used (e.g., model didn't predict)."""
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        line = f"[{timestamp}] ⟳ FALLBACK: {message} → Using: {fallbackUsed}"
+        with open(self.filePath, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        print(f"    ⟳ FALLBACK: {message} → {fallbackUsed}")
