@@ -9,21 +9,13 @@ import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
+from configuration.configLoader import (
+    getCanonicalName, 
+    getPositionBehavior
+)
 
 # Model Path
 MODEL_PATH = Path(__file__).parent / "weights" / "cap" / "best.pt"
-
-# Location Mapping: Excel Name -> OBB Class Name
-LOCATION_MAP = {
-    "FRONT-CROWN": "FRONT_CROWN",
-    "CAP-BACK": "CAP_BACK",
-    "CAP-SIDE": "CAP_SIDE",
-    "CAP-FRONT-SIDE": "CAP_FRONT_SIDE",
-    "LOWER-LEFT-CROWN": "LOWER_LEFT_CROWN",
-    "LOWER-RIGHT-CROWN": "LOWER_RIGHT_CROWN",
-    "BACK": "CAP_BACK",
-    "SIDE": "CAP_SIDE"
-}
 
 # Singleton Instance & Cache
 _inferenceEngine = None
@@ -58,14 +50,22 @@ def _getRegions(imagePath):
         
     return _detectionCache[key]
 
+# Location Mapping: Excel Name -> OBB Class Name
+# Now handled dynamically via getCanonicalName
 def _getObbClassName(locationName):
-    """Get OBB class name from location."""
-    norm = normalizeLocation(locationName)
-    # Check map
-    for key, val in LOCATION_MAP.items():
-        if key in norm:
-            return val
-    return norm.replace("-", "_")
+    """Get OBB class name for caps from location."""
+    canonical = getCanonicalName(locationName)
+    
+    # Handle context-aware mappings (if user passes generic names like "BACK")
+    if canonical == "FULL-BACK": return "CAP_BACK"
+    if canonical == "FULL-FRONT": return "FRONT_CROWN"
+    if canonical == "LEFT-SIDE": return "CAP_SIDE"
+    if canonical == "RIGHT-SIDE": return "CAP_SIDE"
+    
+    # Check map for specific cap positions
+    # If the canonical name is already a cap position (e.g. FRONT-CROWN)
+    # just return it with underscores
+    return canonical.replace("-", "_").replace(" ", "_")
 
 # ============================================================================
 # Heuristic Fallback Logic
@@ -118,19 +118,22 @@ def _getHeuristicCoordinates(imagePath, locationName):
     centerX = bx + bw // 2
     centerY = by + bh // 2
     
-    if "FRONT-CROWN" in normLoc:
+    # Use canonical/OBB class name for checking logic
+    obbClass = _getObbClassName(locationName)
+    
+    if "FRONT_CROWN" in obbClass:
         return centerX, int(by + bh * 0.25)
         
-    if "CAP-BACK" in normLoc or "CAP-SIDE" in normLoc:
+    if "CAP_BACK" in obbClass or "CAP_SIDE" in obbClass:
         return centerX, centerY
         
-    if "CAP-FRONT-SIDE" in normLoc:
+    if "CAP_FRONT_SIDE" in obbClass:
         return int(bx + bw * 0.75), int(by + bh * 0.4)
         
-    if "LOWER-LEFT-CROWN" in normLoc:
+    if "LOWER_LEFT_CROWN" in obbClass:
         return int(bx + bw * 0.3), int(by + bh * 0.6)
 
-    if "LOWER-RIGHT-CROWN" in normLoc:
+    if "LOWER_RIGHT_CROWN" in obbClass:
         return int(bx + bw * 0.7), int(by + bh * 0.6)
 
     return centerX, centerY
@@ -159,16 +162,30 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     return _getHeuristicCoordinates(imagePath, locationName)
 
 def getRotation(imagePath, locationName):
-    """Get rotation angle (OBB -> 0)."""
+    """
+    Get rotation angle (degrees).
+    Uses behavior flags from registry.
+    """
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
+        
         if targetClass in regions:
             return -regions[targetClass].angle
-    except:
+            
+    except Exception:
         pass
+    
     return 0.0
 
 def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """Get logo scale."""
-    return baseSize
+    """
+    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
+    """
+    return (99, 99)

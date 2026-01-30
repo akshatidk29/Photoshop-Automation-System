@@ -1,158 +1,61 @@
 """
 Combo Position Parser
 Parses position names from Excel into individual position components.
-Uses positionAliases.yaml for configuration.
+Uses positionRegistry.yaml for configuration.
 """
 
-from core.utils import VALID_LOCATIONS
-
-# Try to load from YAML config, fall back to hardcoded values
-try:
-    from configuration.configLoader import (
-        getPositionAliases, getValidPositions, getComboMappings
-    )
-    CONFIG_AVAILABLE = True
-except ImportError:
-    CONFIG_AVAILABLE = False
-
-
-def _getPositionAliases():
-    """Get position aliases (from YAML or fallback)."""
-    if CONFIG_AVAILABLE:
-        return getPositionAliases()
-    # Fallback hardcoded values
-    return {
-        "BAG-FRONT": "FRONT (ON BAG)",
-        "FRONT-ON-BAG": "FRONT (ON BAG)",
-        "BAG-POCKET": "ON POCKET (ON BAG)",
-        "CAP-FRONT": "FRONT-CROWN",
-        "CORNER-TOWEL": "CORNER-ANGLED-TOWEL",
-    }
-
-
-def _getSinglePositions():
-    """Get valid single positions (from YAML or fallback)."""
-    if CONFIG_AVAILABLE:
-        return getValidPositions()
-    # Fallback hardcoded values
-    return {
-        "FULL-BACK", "FULL-FRONT",
-        "LEFT-BICEP", "RIGHT-BICEP",
-        "LEFT-CHEST", "RIGHT-CHEST",
-        "LEFT-COLLAR", "RIGHT-COLLAR",
-        "LEFT-CUFF", "RIGHT-CUFF",
-        "LEFT-HIP", "RIGHT-HIP",
-        "LEFT-SLEEVE", "RIGHT-SLEEVE",
-        "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
-        "ON-POCKET", "BACK-YOKE",
-        "FRONT-CROWN", "CAP-BACK", "CAP-SIDE", "CAP-FRONT-SIDE",
-        "LOWER-LEFT-CROWN", "LOWER-RIGHT-CROWN",
-        "CORNER-ANGLED-TOWEL", "FRONT_CENTER", "FRONT_NAPKIN",
-        "FRONT (ON BAG)", "ON POCKET (ON BAG)"
-    }
-
+from configuration.configLoader import (
+    getCanonicalName,
+    getComboMappings,
+    isComboPosition as isComboPositionCheck
+)
 
 def _getComboMappings():
-    """Get combo position mappings (from YAML or fallback)."""
-    if CONFIG_AVAILABLE:
-        return getComboMappings()
-    # Fallback hardcoded values
-    return {
-        "FULL-BACK & FULL-FRONT": ["FULL-BACK", "FULL-FRONT"],
-        "FULL-FRONT-FULL-BACK": ["FULL-FRONT", "FULL-BACK"],
-        "LEFT-BICEP-RIGHT-BICEP": ["LEFT-BICEP", "RIGHT-BICEP"],
-    }
-
+    """Get combo position mappings."""
+    return getComboMappings()
 
 def isComboPosition(locationName):
     """Check if a position is a combo position (requires multiple logos)."""
-    normalized = str(locationName).strip().upper().replace(" ", "-")
-    
-    comboMappings = _getComboMappings()
-    singlePositions = _getSinglePositions()
-    
-    # Check explicit mappings first
-    if normalized in comboMappings:
-        return True
-    
-    # Check for & separator
-    if " & " in locationName.upper() or "&" in locationName:
-        return True
-    
-    # Check if it's a known single position
-    if normalized in singlePositions:
-        return False
-    
-    # Try to detect combo by counting position keywords
-    positionCount = 0
-    for pos in singlePositions:
-        if pos in normalized:
-            positionCount += 1
-    
-    return positionCount > 1
-
+    return isComboPositionCheck(locationName)
 
 def parseComboPosition(locationName):
-    """Parse a combo position into list of individual positions.
-    
-    Returns list of position names. Single positions return [positionName].
+    """
+    Parse a combo position into list of individual positions.
+    Returns list of canonical position names.
+    Single positions return [canonicalName].
     Combo positions return [pos1, pos2, ...].
     """
-    normalized = str(locationName).strip().upper().replace(" ", "-")
+    # 1. First cleanup/normalize
+    canonical = getCanonicalName(locationName)
     
-    positionAliases = _getPositionAliases()
-    comboMappings = _getComboMappings()
-    singlePositions = _getSinglePositions()
+    # 2. Check if it's a known combo in the registry
+    combos = getComboMappings()
     
-    # Check position aliases first (e.g., BAG-FRONT -> FRONT (ON BAG))
-    if normalized in positionAliases:
-        return [positionAliases[normalized]]
+    # Standardize input for lookup comparison (uppercase, no spaces/hyphens for key matching mostly?)
+    # But getCanonicalName already handles aliases. 
+    # If the canonical name itself is a combo key (e.g. "FULL-BACK-&-FULL-FRONT"),
+    # then it should be in the combos dict.
     
-    # Check explicit combo mappings
-    if normalized in comboMappings:
-        return list(comboMappings[normalized])
+    # Check direct canonical match against combo keys
+    if canonical in combos:
+        return list(combos[canonical])
     
-    # Handle & separator
-    if " & " in locationName.upper():
-        parts = locationName.upper().split(" & ")
-        result = []
-        for p in parts:
-            pNorm = p.strip().replace(" ", "-")
-            result.append(positionAliases.get(pNorm, pNorm))
+    # Check normalized input against combo keys
+    # (Just in case canonical resolution didn't catch a complex combo alias)
+    # The configLoader's getCanonicalName should handle most aliases.
+    
+    # 3. Check for implicit "&" separation if not explicitly in registry
+    # (Though ideally all supported combos should be in registry)
+    if "&" in locationName:
+        parts = locationName.split("&")
+        result = [getCanonicalName(p.strip()) for p in parts]
         return result
-    
-    if "&" in normalized:
-        parts = normalized.split("&")
-        result = []
-        for p in parts:
-            pNorm = p.strip()
-            result.append(positionAliases.get(pNorm, pNorm))
-        return result
-    
-    # Check if it's a known single position
-    if normalized in singlePositions:
-        return [normalized]
-    
-    # Try intelligent parsing - find all matching single positions
-    foundPositions = []
-    remaining = normalized
-    
-    # Sort by length (longest first) to avoid partial matches
-    sortedPositions = sorted(singlePositions, key=len, reverse=True)
-    
-    for pos in sortedPositions:
-        if pos in remaining:
-            foundPositions.append(pos)
-            remaining = remaining.replace(pos, "", 1)
-    
-    if foundPositions:
-        return foundPositions
-    
-    # Fallback: check aliases one more time, then return normalized
-    return [positionAliases.get(normalized, normalized)]
-
+        
+    # 4. If not a generic combo, it's a single position
+    return [canonical]
 
 def getPositionCount(locationName):
     """Get the number of logo placements needed for a position."""
     return len(parseComboPosition(locationName))
+
 

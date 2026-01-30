@@ -9,18 +9,13 @@ import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
+from configuration.configLoader import (
+    getCanonicalName, 
+    getPositionBehavior
+)
 
 # Model Path
 MODEL_PATH = Path(__file__).parent / "weights" / "bag" / "best.pt"
-
-# Location Mapping
-LOCATION_MAP = {
-    "ON-POCKET": "ON_POCKET",
-    "POCKET": "ON_POCKET",
-    "FRONT": "FRONT",
-    "ON-BAG": "FRONT",
-    "MAIN": "FRONT"
-}
 
 # Singleton & Cache
 _inferenceEngine = None
@@ -52,11 +47,23 @@ def _getRegions(imagePath):
             _detectionCache[key] = {}
     return _detectionCache[key]
 
+# Location Mapping: Excel Name -> OBB Class Name
+# Now handled dynamically via getCanonicalName
 def _getObbClassName(locationName):
-    norm = normalizeLocation(locationName)
-    for key, val in LOCATION_MAP.items():
-        if key in norm: return val
-    return norm.replace("-", "_")
+    """Get OBB class name for bags from location."""
+    canonical = getCanonicalName(locationName)
+    
+    # Context-aware mapping:
+    # "FRONT" on a bag usually means "FRONT (ON BAG)"
+    if canonical == "FULL-FRONT": return "FRONT" # "FRONT" is the OBB class
+    if canonical == "FRONT (ON BAG)": return "FRONT"
+    
+    # "POCKET" on a bag usually means "ON POCKET (ON BAG)"
+    if canonical == "ON-POCKET": return "ON_POCKET" # "ON_POCKET" is the OBB class
+    if canonical == "ON POCKET (ON BAG)": return "ON_POCKET"
+    
+    # Fallback to normalized name with underscores
+    return canonical.replace("-", "_").replace(" ", "_").replace("(", "").replace(")", "")
 
 # ============================================================================
 # Heuristic Fallback Logic
@@ -107,8 +114,7 @@ def _segmentBagRegions(imagePath, bagBox):
              if smoothed[i] > smoothed[i-5:i].max() and smoothed[i] > smoothed[i+1:i+6].max():
                  peaks.append(i)
                  
-    # Filter peaks logic... (simplified here for brevity, keeping core logic)
-    # Re-implementing filtering logic from original
+    # Filter peaks logic
     if len(peaks) > 1:
         filtered = []
         i = 0
@@ -153,11 +159,14 @@ def _getHeuristicCoordinates(imagePath, locationName):
         regions = _segmentBagRegions(imagePath, bagBox)
     except: pass
     
-    if "ON-POCKET" in normLoc or "POCKET" in normLoc:
+    # Use canonical name for checking
+    canonical = getCanonicalName(locationName)
+    
+    if "ON-POCKET" in canonical or "POCKET" in canonical:
         if regions and 'pocket' in regions: return regions['pocket']
         return (centerX, by + int(bh * 0.78))
         
-    if "FRONT" in normLoc or "ON-BAG" in normLoc:
+    if "FRONT" in canonical or "ON-BAG" in canonical:
         if regions and 'upper' in regions: return regions['upper']
         return (centerX, by + int(bh * 0.32))
         
@@ -182,22 +191,28 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     return _getHeuristicCoordinates(imagePath, locationName)
 
 def getRotation(imagePath, locationName):
+    """
+    Get rotation angle (degrees).
+    Uses behavior flags from registry.
+    """
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         if targetClass in regions:
             return -regions[targetClass].angle
-    except: pass
+    except: 
+        pass
+    
     return 0.0
 
 def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    try:
-        bx, by, bw, bh = _getProductBoundingBox(imagePath)
-        scale = (bw * 0.18) / baseSize[0]
-        nw = int(baseSize[0] * scale)
-        nh = int(baseSize[1] * scale)
-        nw = max(100, min(400, nw))
-        nh = max(50, min(200, nh))
-        return (nw, nh)
-    except:
-        return baseSize
+    """
+    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
+    """
+    return baseSize

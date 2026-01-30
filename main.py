@@ -951,10 +951,27 @@ class AutomationApp(ctk.CTk):
         self.startTime = time.time()
         self.errorTracker = ErrorTracker()
         
+        # Capture settings in main thread
+        try:
+            canvasHeight = int(self.canvasSize.get())
+        except:
+            canvasHeight = 1800
+        
+        settings = {
+            'useExcelLogoSize': self.useExcelSize.get(),
+            'logoSizes': self.logoSizes.copy(), # Copy to avoid thread race
+            'clippingEnabled': self.clippingEnabled.get(),
+            'clippingPositions': self.clippingPositions.copy(),
+        }
+        
         if self.clearAssets.get():
             self._clearOutput()
         
-        thread = threading.Thread(target=self._runAutomation, daemon=True)
+        thread = threading.Thread(
+            target=self._runAutomation, 
+            args=(canvasHeight, settings),
+            daemon=True
+        )
         thread.start()
     
     def _clearOutput(self):
@@ -967,19 +984,9 @@ class AutomationApp(ctk.CTk):
             except:
                 pass
     
-    def _runAutomation(self):
-        """Run automation in thread."""
-        try:
-            canvasHeight = int(self.canvasSize.get())
-        except:
-            canvasHeight = 1800
-        
-        settings = {
-            'useExcelLogoSize': self.useExcelSize.get(),
-            'logoSizes': self.logoSizes,
-            'clippingEnabled': self.clippingEnabled.get(),
-            'clippingPositions': self.clippingPositions,
-        }
+    def _runAutomation(self, canvasHeight, settings):
+        """Run automation in thread with pre-captured settings."""
+        # Note: Settings now passed as argument, avoiding thread-unsafe GUI access
         
         success = runAutomation(
             self.excelPath, self.imageRoot, self.logoRoot,

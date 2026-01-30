@@ -49,134 +49,38 @@ def getPsdSizeFromName(name):
 
 
 
-# Strict Location List (39 Positions)
-VALID_LOCATIONS = {
-    # 1200 x 1800 (Garments)
-    "FULL-BACK", "FULL-FRONT",
-    "LEFT-BICEP", "RIGHT-BICEP",
-    "LEFT-CHEST", "RIGHT-CHEST",
-    "LEFT-COLLAR", "RIGHT-COLLAR",
-    "LEFT-CUFF", "RIGHT-CUFF",
-    "LEFT-HIP", "RIGHT-HIP",
-    "LEFT-SLEEVE", "RIGHT-SLEEVE",
-    "LEFT-THIGH-HIGH", "RIGHT-THIGH-HIGH",
-    "ON-POCKET", "BACK-YOKE",
-    
-    # Dual Image Garments
-    "FULL-BACK-FULL-FRONT", # Standardized from &
-    "LEFT-BICEP-RIGHT-BICEP",
-    "LEFT-CHEST-LEFT-BICEP-RIGHT-BICEP",
-    "LEFT-CHEST-RIGHT-BICEP",
-    "LEFT-CHEST-RIGHT-SLEEVE",
-    "LEFT-SLEEVE-RIGHT-SLEEVE",
-    "RIGHT-CHEST-LEFT-BICEP",
-    "RIGHT-CHEST-LEFT-SLEEVE",
-    "RIGHT-CHEST-LEFT-BICEP-RIGHT-BICEP", # Fixed LFT typo from user request if needed, but matched strict list 
-    "FULL-FRONT-FULL-BACK",
-    "LEFT-CHEST-FULL-BACK",
-    "RIGHT-CHEST-FULL-BACK",
+# Strict Location List (REMOVED - use configLoader.validatePosition)
+# VALID_LOCATIONS = {...} 
 
-    # 1200 x 1200 (Caps, Bags, Towels)
-    "FRONT-CROWN", "CAP-BACK", "CAP-SIDE", "CAP-FRONT-SIDE",
-    "LOWER-LEFT-CROWN", "LOWER-RIGHT-CROWN",
-    "CORNER-ANGLED-TOWEL", "FRONT_NAPKIN", "FRONT_CENTER",
-    "FRONT (ON BAG)", "ON POCKET (ON BAG)"
-}
+from configuration.configLoader import (
+    getCanonicalName, 
+    getGarmentType, 
+    isComboPosition
+)
 
 def normalizeLocation(locationName):
     """
-    Standardize location strings:
-    1. Upper case, strip, replace spaces/& with hyphens.
-    2. Sort tokens for combo positions (e.g. RIGHT-SLEEVE-LEFT-SLEEVE -> LEFT-SLEEVE-RIGHT-SLEEVE).
+    Standardize location strings using the configuration registry.
+    Maps aliases to their canonical names.
     """
-    if not locationName:
-        return ""
-        
-    # Initial cleanup: "FULL-BACK & FULL-FRONT" -> "FULL-BACK-FULL-FRONT"
-    clean = str(locationName).upper().replace("&", "-").replace(" ", "-")
-    # Remove multiple hyphens
-    clean = "-".join(filter(None, clean.split("-")))
-
-    
-    # Mapping for known variations
-    mapping = {
-        "RIGHT-CHEST-LFT-BICEP-RIGHT-BICEP": "RIGHT-CHEST-LEFT-BICEP-RIGHT-BICEP", # Fix typo LFT
-        "FULL-BACK-&-FULL-FRONT": "FULL-FRONT-FULL-BACK", # Normalize order? 
-    }
-    
-    # Basic normalization for lookup
-    normalized = clean
-    for k, v in mapping.items():
-        if k in normalized:
-            normalized = v
-            
-    # Check if this valid as-is
-    if normalized in VALID_LOCATIONS:
-        return normalized
-    
-    return normalized 
+    return getCanonicalName(locationName)
 
 
 def detectGarmentTypeFromLocation(locationName, partId=None):
     """
-    Returns category: T-SHIRT (includes Dual), CAP, BAG, BLANKET
-    Uses YAML configuration if available, with fallback to hardcoded logic.
+    Returns category: T-SHIRT (includes Dual), CAP, BAG, BLANKET.
+    Uses centralized configuration registry.
     """
-    # Try YAML-based detection first
-    try:
-        from configuration.configLoader import detectGarmentType
-        return detectGarmentType(locationName, partId)
-    except ImportError:
-        pass
-    
-    # Fallback to hardcoded logic
-    loc = normalizeLocation(locationName)
-    partIdUpper = str(partId).upper() if partId else ""
-    
-    # Check by part ID prefix first (more reliable)
-    if partIdUpper.startswith("BG"):
-        return "BAG"
-    if partIdUpper.startswith("C") or partIdUpper.startswith("CP"):
-        return "CAP"
-    if partIdUpper.startswith("BP"):
-        return "BLANKET"
-    
-    # Bag
-    if "BAG" in loc or "FRONT_CENTER" in loc:
-        return "BAG"
-        
-    # Cap
-    if "CAP" in loc or "CROWN" in loc:
-        return "CAP"
-        
-    # Towel/Blanket
-    if "TOWEL" in loc  or "NAPKIN" in loc:
-        return "BLANKET"
-        
-    # Default to T-SHIRT (Garments)
-    return "T-SHIRT"
+    return getGarmentType(locationName, partId)
+
 
 def isDualImage(locationName):
-    """Returns True if the location implies a dual-image layout (Front + Back)."""
-    loc = normalizeLocation(locationName)
-    # Keyword based or list based
-    if "BACK" in loc and "FRONT" in loc:
-        return True
-    if "BACK" in loc and "CHEST" in loc:
-        return True
-    if "BACK" in loc and "SLEEVE" in loc: # e.g. LEFT-CHEST-FULL-BACK
-        return True
-    if "-BACK" in loc and "FULL" not in loc: 
-
-        pass
-        
-    # Explicit list from user request item 4:
-    # "all the garment locations containing BACK keyword has this duala image thing"
-    if "BACK" in loc:
-        return True
-        
-    return False
-
+    """
+    Returns True if the location describes a combo/dual placement.
+    Delegates to configuration registry.
+    """
+    # Just check if it's a known combo position
+    return isComboPosition(locationName)
 
 
 def getPopperPath():
@@ -187,6 +91,7 @@ def getPopperPath():
         return bundledPath
     
     # Try system poppler (installed via choco/msi)
+    # This list could also be in config if desired, but acceptable here for now
     systemPaths = [
         r"C:\Program Files\poppler\Library\bin",
         r"C:\Program Files (x86)\poppler\Library\bin",

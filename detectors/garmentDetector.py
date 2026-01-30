@@ -10,34 +10,13 @@ import cv2
 import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
+from configuration.configLoader import (
+    getCanonicalName, 
+    getPositionBehavior
+)
 
 # Model Path
 MODEL_PATH = Path(__file__).parent / "weights" / "garment" / "best.pt"
-
-# Location Mapping: Excel Name -> OBB Class Name
-LOCATION_MAP = {
-    # Front
-    "FULL-FRONT": "FULL_FRONT",
-    "LEFT-CHEST": "LEFT_CHEST",
-    "RIGHT-CHEST": "RIGHT_CHEST",
-    "LEFT-COLLAR": "LEFT_COLLAR",
-    "RIGHT-COLLAR": "RIGHT_COLLAR",
-    "LEFT-BICEP": "LEFT_BICEP",
-    "RIGHT-BICEP": "RIGHT_BICEP",
-    "LEFT-SLEEVE": "LEFT_SLEEVE",
-    "RIGHT-SLEEVE": "RIGHT_SLEEVE",
-    "LEFT-CUFF": "LEFT_CUFF",
-    "RIGHT-CUFF": "RIGHT_CUFF",
-    "LEFT-HIP": "LEFT_HIP",
-    "RIGHT-HIP": "RIGHT_HIP",
-    "LEFT-THIGH-HIGH": "LEFT_THIGH_HIGH",
-    "RIGHT-THIGH-HIGH": "RIGHT_THIGH_HIGH",
-    "ON-POCKET": "ON_POCKET",
-    
-    # Back
-    "FULL-BACK": "FULL_BACK",
-    "BACK-YOKE": "BACK_YOKE",
-}
 
 # Singleton Instance & Cache
 _inferenceEngine = None
@@ -72,15 +51,17 @@ def _getRegions(imagePath):
         
     return _detectionCache[key]
 
+# Location Mapping: Excel Name -> OBB Class Name
+# Now handled dynamically via getCanonicalName
+def _getObbClassName(locationName):
+    """Get OBB class name for garments from location."""
+    canonical = getCanonicalName(locationName)
+    # Convert canonical name (e.g., "FULL-FRONT") to model class name (e.g., "FULL_FRONT")
+    return canonical.replace("-", "_").replace(" ", "_")
+
 def _normalizeLocation(locationName):
     """Normalize location name."""
-    if not locationName: return ""
-    return str(locationName).strip().upper().replace(" ", "-").replace("_", "-")
-
-def _getObbClassName(locationName):
-    """Get OBB class name from location."""
-    norm = _normalizeLocation(locationName)
-    return LOCATION_MAP.get(norm, norm.replace("-", "_"))
+    return getCanonicalName(locationName)
 
 # ============================================================================
 # MediaPipe Pose Fallback
@@ -443,14 +424,29 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Returns OBB angle if detected, 0.0 otherwise.
+    Uses behavior flags from registry:
+      - standard: Use OBB angle
+      - vertical_lock: Force 0 (vertical)
+      - fixed_0: Force 0
+      - fixed_45: Force 45 (for towels)
     """
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    if rotationMode == 'fixed_90':
+        return 90.0
+    if rotationMode == 'vertical_lock':
+        return 0.0
+        
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         
         if targetClass in regions:
-            return -regions[targetClass].angle
+            angle = -regions[targetClass].angle
+            return angle
             
     except Exception:
         pass
@@ -459,10 +455,7 @@ def getRotation(imagePath, locationName):
 
 def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
     """
-    Get logo sizing strategy.
-    Returns (300, 300) for Full Front/Back, (99, 99) for others.
+    DEPRECATED: Logo sizing logic is now handled in core/utils.py via computeLogoSize.
+    This function is kept for interface compatibility but returns standard fallback.
     """
-    loc = _normalizeLocation(locationName)
-    if "FULL-FRONT" in loc or "FULL-BACK" in loc:
-        return (300, 300)
     return (99, 99)

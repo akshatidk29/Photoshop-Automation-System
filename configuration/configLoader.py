@@ -5,6 +5,7 @@ Loads and manages YAML configuration files for the automation system.
 
 import os
 import yaml
+import re
 from pathlib import Path
 
 # Configuration directory path
@@ -56,6 +57,160 @@ def clearConfigCache():
 
 
 # ============================================================================
+# Position Registry (Master Configuration)
+# ============================================================================
+
+def getPositionRegistry():
+    """Get the master position registry configuration."""
+    return _loadYaml('positionRegistry.yaml')
+
+
+def getCanonicalName(positionName):
+    """
+    Resolve any alias or variation to the canonical position name.
+    
+    Args:
+        positionName: Any position string (e.g., "BAG-FRONT", "Front", "LC")
+        
+    Returns:
+        Canonical name (e.g., "FRONT (ON BAG)", "FULL-FRONT", "LEFT-CHEST")
+        Returns the input sanitized if no match found.
+    """
+    if not positionName:
+        return ""
+        
+    registry = getPositionRegistry()
+    positions = registry.get('positions', {})
+    
+    # Normalize input: UPPERCASE, replace spaces with hyphens, remove extra hyphens
+    cleanInput = str(positionName).strip().upper().replace(" ", "-").replace("&", "-")
+    cleanInput = "-".join(filter(None, cleanInput.split("-")))
+    
+    # 1. Check if it IS a canonical name (Exact Match)
+    if cleanInput in positions:
+        return cleanInput
+        
+    # 1b. Check against normalized keys (Handle spaces/parens in keys)
+    # This handles "FRONT (ON BAG)" (key) vs "FRONT-(ON-BAG)" (input)
+    for key in positions:
+        normKey = str(key).strip().upper().replace(" ", "-").replace("&", "-")
+        normKey = "-".join(filter(None, normKey.split("-")))
+        if normKey == cleanInput:
+            return key
+        
+    # 2. Check aliases
+    # We build a reverse lookup map on the fly (or ideally cached)
+    # For now, iterate (registry is small)
+    for canonical, data in positions.items():
+        aliases = data.get('aliases', [])
+        # Check direct alias match
+        for alias in aliases:
+            # Normalize alias too just in case
+            aliasNorm = str(alias).strip().upper().replace(" ", "-").replace("&", "-")
+            aliasNorm = "-".join(filter(None, aliasNorm.split("-")))
+            if aliasNorm == cleanInput:
+                return canonical
+                
+    # 3. Check Combo Mappings
+    combos = registry.get('comboMappings', {})
+    if cleanInput in combos:
+        return cleanInput
+    
+    # 3b. Check normalized Combo keys
+    for key in combos:
+        normKey = str(key).strip().upper().replace(" ", "-").replace("&", "-")
+        normKey = "-".join(filter(None, normKey.split("-")))
+        if normKey == cleanInput:
+            return key
+        
+    # Return normalized input if unknown
+    return cleanInput
+
+
+def getPositionData(positionName):
+    """
+    Get the full metadata for a position.
+    Resolves aliases first.
+    """
+    canonical = getCanonicalName(positionName)
+    registry = getPositionRegistry()
+    return registry.get('positions', {}).get(canonical, {})
+
+
+def getGarmentType(positionName, partId=None):
+    """
+    Determine garment type (T-SHIRT, CAP, BAG, BLANKET) from position.
+    
+    Args:
+        positionName: Position name
+        partId: Optional part ID for fallback heuristics
+        
+    Returns:
+        Garment Type string
+    """
+    # 1. Try Registry Lookup
+    data = getPositionData(positionName)
+    if data and 'type' in data:
+        return data['type']
+        
+    # 2. Fallback Heuristics (for completely unknown positions)
+    posNorm = str(positionName).upper()
+    partIdNorm = str(partId).upper() if partId else ""
+    
+    if "BAG" in posNorm or partIdNorm.startswith("BG"):
+        return "BAG"
+    if "CAP" in posNorm or "CROWN" in posNorm or partIdNorm.startswith("C") or partIdNorm.startswith("CP"):
+        return "CAP"
+    if "TOWEL" in posNorm or "BLANKET" in posNorm or partIdNorm.startswith("BP"):
+        return "BLANKET"
+        
+    return "T-SHIRT"
+
+
+def getPositionBehavior(positionName):
+    """
+    Get behavior flags for a position.
+    
+    Returns dict: { 'rotation': '...', 'reference': '...', 'mirror': bool }
+    """
+    data = getPositionData(positionName)
+    return data.get('behavior', {})
+
+
+def getComboMappings():
+    """Get the dictionary of combo position mappings."""
+    registry = getPositionRegistry()
+    return registry.get('comboMappings', {})
+
+
+def isComboPosition(positionName):
+    """Check if a position is a combo/dual position."""
+    combos = getComboMappings()
+    # Normalize input first
+    cleanInput = str(positionName).strip().upper().replace(" ", "-").replace("&", "-")
+    cleanInput = "-".join(filter(None, cleanInput.split("-")))
+    return cleanInput in combos
+
+
+def validatePosition(positionName):
+    """
+    Check if a position is valid (either canonical, alias, or combo).
+    
+    Returns:
+        (isValid, canonicalName)
+    """
+    # Resolve name
+    canonical = getCanonicalName(positionName)
+    registry = getPositionRegistry()
+    
+    # Check if it exists in main positions OR combo mappings
+    if canonical in registry.get('positions', {}) or canonical in registry.get('comboMappings', {}):
+        return True, canonical
+        
+    return False, canonical
+
+
+# ============================================================================
 # Column Mapping Functions
 # ============================================================================
 
@@ -67,67 +222,40 @@ def getColumnMapping():
 def findColumnName(dfColumns, internalName):
     """
     Find the actual Excel column name for an internal field name.
-    
-    Args:
-        dfColumns: List of column names from the DataFrame
-        internalName: Internal field name (e.g., 'productId')
-    
-    Returns:
-        The matching column name from dfColumns, or None if not found
     """
     import re
     
-    # Clean column names by stripping control characters (like \r from Windows Excel)
     def cleanName(name):
-        if name is None:
-            return ''
-        s = str(name)
-        # Remove literal escape sequences like _x000d_ (openpyxl escape for \r)
-        s = re.sub(r'_x[0-9a-fA-F]{4}_', '', s)
-        # Remove actual control characters
+        if name is None: return ''
+        s = re.sub(r'_x[0-9a-fA-F]{4}_', '', str(name))
         s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
         return s.strip()
     
-    # Build mapping of cleaned names to original names
     cleanToOriginal = {cleanName(col): col for col in dfColumns}
     cleanedColumns = list(cleanToOriginal.keys())
     
     mapping = getColumnMapping()
     columns = mapping.get('columns', {})
-    
     variations = columns.get(internalName, [])
     
-    # Try exact match with cleaned names
     for variation in variations:
         cleanVar = cleanName(variation)
         if cleanVar in cleanedColumns:
             return cleanToOriginal[cleanVar]
-    
-    # Try case-insensitive match with cleaned names
+            
     cleanedColumnsLower = {col.lower(): col for col in cleanedColumns}
     for variation in variations:
         cleanVarLower = cleanName(variation).lower()
         if cleanVarLower in cleanedColumnsLower:
-            originalClean = cleanedColumnsLower[cleanVarLower]
-            return cleanToOriginal[originalClean]
-    
+            return cleanToOriginal[cleanedColumnsLower[cleanVarLower]]
+            
     return None
 
 
 def normalizeRowData(row, dfColumns):
-    """
-    Convert a DataFrame row to a normalized dictionary with internal field names.
-    
-    Args:
-        row: pandas Series (a row from DataFrame)
-        dfColumns: List of column names from DataFrame
-    
-    Returns:
-        Dictionary with internal field names as keys
-    """
+    """Convert a DataFrame row to a normalized dictionary."""
     mapping = getColumnMapping()
     columns = mapping.get('columns', {})
-    
     normalized = {}
     
     for internalName, variations in columns.items():
@@ -135,444 +263,237 @@ def normalizeRowData(row, dfColumns):
             if variation in dfColumns:
                 value = row.get(variation)
                 if value is not None:
-                    normalized[internalName] = str(value).strip() if not isinstance(value, float) or not (value != value) else ""
+                    # Handle NaN
+                    if isinstance(value, float) and value != value:
+                        sVal = ""
+                    else:
+                        sVal = str(value).strip()
+                    normalized[internalName] = sVal
                 break
-    
     return normalized
 
+
+# ============================================================================
+# Color Alias Functions
+# ============================================================================
+
+def getColorAliasesConfig():
+    """Get color alias configuration."""
+    return _loadYaml('colorAliases.yaml')
+
+def getColorAliases():
+    """Get the dictionary of color aliases."""
+    return getColorAliasesConfig().get('aliases', {})
+
+def expandColorVariants(colorName):
+    """
+    Generate a set of variant strings for a color name.
+    Useful for flexible matching (e.g., "Navy" matches "nvy", "Dark Navy").
+    
+    Args:
+        colorName: The base color string (e.g. "Navy")
+        
+    Returns:
+        Set of lowercase normalized variant strings
+    """
+    if not colorName:
+        return set()
+        
+    normalized = str(colorName).lower().strip()
+    config = getColorAliasesConfig()
+    aliases = config.get('aliases', {})
+    
+    variants = {normalized}
+    
+    # 1. Reverse lookup: If input is a short alias (e.g. "nvy"), find full names
+    if normalized in aliases:
+        for full in aliases[normalized]:
+            variants.add(full.lower())
+            
+    # 2. Forward lookup: If input is a full name (e.g. "Navy"), find aliases
+    # This requires scanning the alias dict
+    for alias, fulls in aliases.items():
+        if normalized in [f.lower() for f in fulls]:
+            variants.add(alias)
+            
+    # 3. Handle compound parts (e.g. "darknavy" -> "dark", "navy")
+    # This helps matching split variants
+    
+    return variants
 
 # ============================================================================
 # Logo Size Functions
 # ============================================================================
 
+def getPositionType(positionName):
+    """
+    Return 'front', 'back', 'dual', or 'side' for a position.
+    Used by imageLocator.
+    """
+    # 1. Check if it's a combo (Dual/Multi)
+    if isComboPosition(positionName):
+        return 'dual'
+    
+    # 2. Check registry for explicit 'view' type
+    data = getPositionData(positionName)
+    if data and 'view' in data:
+        return data['view']
+        
+    # 3. Default to 'front'
+    return 'front'
+
+
 def getLogoSizesConfig():
-    """Get the logo sizes configuration."""
     return _loadYaml('logoSizes.yaml')
 
-
 def getDefaultLogoSize(position):
-    """
-    Get the default logo width for a position.
-    
-    Args:
-        position: Position name (e.g., 'LEFT-CHEST')
-    
-    Returns:
-        Width in pixels
-    """
     config = getLogoSizesConfig()
+    # Normalize position first used canonical name
+    canonical = getCanonicalName(position)
+    
     positions = config.get('positions', {})
     defaultSize = config.get('defaultSize', 99)
     
-    # Normalize position name
-    posNorm = str(position).strip().upper().replace(' ', '-').replace('_', '-')
-    
-    # Try exact match first
-    if posNorm in positions:
-        return positions[posNorm]
-    
-    # Try partial match
-    for key, value in positions.items():
-        keyNorm = key.upper().replace(' ', '-').replace('_', '-')
-        if keyNorm in posNorm or posNorm in keyNorm:
-            return value
-    
+    # Try canonical
+    if canonical in positions:
+        return positions[canonical]
+        
+    # Try finding loop
+    for key, val in positions.items():
+        # Check if key is alias of our position
+        if getCanonicalName(key) == canonical:
+            return val
+            
     return defaultSize
 
 
+# ============================================================================
+# Constants & Helpers
+# ============================================================================
+
+def getIgnoreWords():
+    return _loadYaml('filenamePatterns.yaml').get('ignoreWords', [])
+
+def getFrontIndicators():
+    return _loadYaml('filenamePatterns.yaml').get('frontIndicators', [])
+
+def getBackIndicators():
+    return _loadYaml('filenamePatterns.yaml').get('backIndicators', [])
+
+def getSideIndicators():
+    return _loadYaml('filenamePatterns.yaml').get('sideIndicators', [])
+
+def getAllowedExtensions():
+    return ['.' + e.lstrip('.') for e in _loadYaml('filenamePatterns.yaml').get('allowedExtensions', ['jpg','png'])]
+
+
+# ============================================================================
+# GUI / Advanced Settings Helpers
+# ============================================================================
+
 def getAllLogoSizes():
-    """Get all position sizes as a dictionary."""
+    """Get all configured logo sizes for the GUI."""
     config = getLogoSizesConfig()
     return config.get('positions', {})
 
-
-def _normalizePositionKey(pos):
-    """Normalize a position key for comparison - removes all formatting variations."""
-    import re
-    # Remove all non-alphanumeric characters and convert to uppercase
-    return re.sub(r'[^A-Z0-9]', '', str(pos).upper())
-
-
-def getLogoSizeForPosition(position, logoSizesDict=None):
+def getLogoSizeForPosition(position, configOverride=None):
     """
-    Get logo size for a position with robust matching.
-    
-    Handles format variations:
-    - 'FRONT (ON BAG)' vs 'FRONT-(ON-BAG)' vs 'FRONT-ON-BAG'
-    - 'FRONT_CENTER' vs 'FRONT-CENTER'
-    - 'ON POCKET (ON BAG)' vs 'ON-POCKET-(ON-BAG)'
+    Get the specific logo size for a position.
     
     Args:
-        position: Position name from Excel/comboParser (e.g., 'FRONT-(ON-BAG)')
-        logoSizesDict: Optional dict of position->size, defaults to getAllLogoSizes()
-    
-    Returns:
-        Size in pixels (int)
+        position: The position name
+        configOverride: Optional dictionary to use instead of loading from file
+                        (used by excelPreProcessor with GUI settings)
     """
-    if logoSizesDict is None:
-        logoSizesDict = getAllLogoSizes()
-    
-    config = getLogoSizesConfig()
-    defaultSize = config.get('defaultSize', 99)
-    
-    if not position:
+    if configOverride is not None:
+        # Use provided config
+        canonical = getCanonicalName(position)
+        
+        # Handle both nested config (like YAML) and flat dict (like GUI state)
+        if 'positions' in configOverride and isinstance(configOverride['positions'], dict):
+             positions = configOverride['positions']
+             defaultSize = configOverride.get('defaultSize', 99)
+        else:
+             # Assume it's the flat positions dictionary itself
+             positions = configOverride
+             defaultSize = 99
+        
+        # Try canonical
+        if canonical in positions:
+            # Handle string/int conversion safely
+            try:
+                return int(positions[canonical])
+            except:
+                return defaultSize
+            
+        # Try finding alias/match
+        for key, val in positions.items():
+            if getCanonicalName(key) == canonical:
+                try:
+                    return int(val)
+                except:
+                    return defaultSize
+                
         return defaultSize
-    
-    posNorm = _normalizePositionKey(position)
-    
-    # Try to find matching key
-    for configKey, configSize in logoSizesDict.items():
-        configKeyNorm = _normalizePositionKey(configKey)
-        if configKeyNorm == posNorm:
-            return configSize
-    
-    # No exact match found
-    return defaultSize
+        
+    return getDefaultLogoSize(position)
 
-
-def updateLogoSize(position, size):
-    """Update the logo size for a specific position."""
-    config = getLogoSizesConfig()
-    if 'positions' not in config:
-        config['positions'] = {}
-    config['positions'][position] = size
-    return _saveYaml('logoSizes.yaml', config)
-
-
-# ============================================================================
-# Clipping Configuration Functions
-# ============================================================================
+def updateLogoSize(positionName, newSize):
+    """
+    Update the logo size for a specific position in the config.
+    """
+    try:
+        data = getLogoSizesConfig()
+        canonical = getCanonicalName(positionName)
+        
+        if 'positions' not in data:
+            data['positions'] = {}
+            
+        data['positions'][canonical] = int(newSize)
+        return _saveYaml('logoSizes.yaml', data)
+    except Exception as e:
+        print(f"[Config] Failed to update logo size: {e}")
+        return False
 
 def getClippingConfig():
     """Get the clipping configuration."""
     return _loadYaml('clippingPositions.yaml')
 
+def getAllClippingPositions():
+    """Get list of positions enabled for clipping."""
+    config = getClippingConfig()
+    return config.get('positions', {})
 
 def isClippingEnabledGlobal():
     """Check if clipping is enabled globally."""
     config = getClippingConfig()
     return config.get('clippingEnabled', False)
 
-
-def isClippingEnabledForPosition(position):
+def updateClippingConfig(globalEnabled=None, positions=None):
     """
-    Check if clipping is enabled for a specific position.
+    Update clipping configuration.
     
     Args:
-        position: Position name
-    
-    Returns:
-        True if clipping should be applied
+        globalEnabled: bool or None (if None, keeps existing)
+        positions: dict of {positionName: bool} or None
     """
-    config = getClippingConfig()
-    
-    # Check global toggle first
-    if not config.get('clippingEnabled', False):
+    try:
+        data = getClippingConfig()
+        
+        if globalEnabled is not None:
+            data['clippingEnabled'] = bool(globalEnabled)
+            
+        if positions:
+            if 'positions' not in data:
+                data['positions'] = {}
+            
+            # Update specific positions
+            for pos, enabled in positions.items():
+                # Store by canonical name
+                canonical = getCanonicalName(pos)
+                data['positions'][canonical] = bool(enabled)
+                
+        return _saveYaml('clippingPositions.yaml', data)
+    except Exception as e:
+        print(f"[Config] Failed to update clipping config: {e}")
         return False
-    
-    positions = config.get('positions', {})
-    defaultClipping = config.get('defaultClipping', False)
-    
-    # Normalize position name
-    posNorm = str(position).strip().upper().replace(' ', '-').replace('_', '-')
-    
-    # Try exact match first
-    if posNorm in positions:
-        return positions[posNorm]
-    
-    # Try partial match
-    for key, value in positions.items():
-        keyNorm = key.upper().replace(' ', '-').replace('_', '-')
-        if keyNorm in posNorm or posNorm in keyNorm:
-            return value
-    
-    return defaultClipping
-
-
-def getAllClippingPositions():
-    """Get all clipping position settings."""
-    config = getClippingConfig()
-    return config.get('positions', {})
-
-
-def updateClippingGlobal(enabled):
-    """Update the global clipping toggle."""
-    config = getClippingConfig()
-    config['clippingEnabled'] = enabled
-    return _saveYaml('clippingPositions.yaml', config)
-
-
-def updateClippingPosition(position, enabled):
-    """Update clipping setting for a specific position."""
-    config = getClippingConfig()
-    if 'positions' not in config:
-        config['positions'] = {}
-    config['positions'][position] = enabled
-    return _saveYaml('clippingPositions.yaml', config)
-
-
-def updateClippingConfig(globalEnabled, positionsDict):
-    """Update entire clipping configuration at once."""
-    config = getClippingConfig()
-    config['clippingEnabled'] = globalEnabled
-    config['positions'] = positionsDict
-    return _saveYaml('clippingPositions.yaml', config)
-
-
-# ============================================================================
-# Color Aliases Functions
-# ============================================================================
-
-def getColorAliases():
-    """Get color alias configuration as a dictionary."""
-    config = _loadYaml('colorAliases.yaml')
-    return config.get('aliases', {})
-
-
-def getCompoundColorParts():
-    """Get compound color parts for splitting joined colors."""
-    config = _loadYaml('colorAliases.yaml')
-    return config.get('compoundParts', [])
-
-
-def expandColorVariants(color):
-    """
-    Generate all color name variants for matching.
-    Uses YAML configuration for comprehensive matching.
-    
-    Args:
-        color: The color string to expand
-        
-    Returns:
-        Set of all possible variants of this color
-    """
-    import re
-    aliases = getColorAliases()
-    
-    # Normalize input
-    colorNorm = re.sub(r'[^a-z0-9]', '', str(color).lower())
-    variants = {colorNorm}
-    
-    # Add all alias expansions (bidirectional)
-    for abbrev, fulls in aliases.items():
-        abbrevNorm = re.sub(r'[^a-z0-9]', '', abbrev.lower())
-        
-        # If color contains the abbreviation, add full versions
-        if abbrevNorm in colorNorm:
-            for full in fulls:
-                fullNorm = re.sub(r'[^a-z0-9]', '', full.lower())
-                variants.add(colorNorm.replace(abbrevNorm, fullNorm))
-        
-        # If color contains any full version, add abbreviation
-        for full in fulls:
-            fullNorm = re.sub(r'[^a-z0-9]', '', full.lower())
-            if fullNorm in colorNorm:
-                variants.add(colorNorm.replace(fullNorm, abbrevNorm))
-    
-    return variants
-
-
-# ============================================================================
-# Position Aliases Functions
-# ============================================================================
-
-def getPositionAliasesConfig():
-    """Get the position aliases configuration."""
-    return _loadYaml('positionAliases.yaml')
-
-
-def getPositionAliases():
-    """Get position aliases dictionary - maps Excel variations to canonical names."""
-    config = getPositionAliasesConfig()
-    return config.get('aliases', {})
-
-
-def getValidPositions():
-    """Get set of all valid canonical position names."""
-    config = getPositionAliasesConfig()
-    return set(config.get('validPositions', []))
-
-
-def getComboMappings():
-    """Get combo position mappings - maps combined positions to their parts."""
-    config = getPositionAliasesConfig()
-    return config.get('comboMappings', {})
-
-
-def resolvePositionAlias(position):
-    """
-    Resolve a position name to its canonical form using aliases.
-    
-    Args:
-        position: Position name (possibly with variations)
-        
-    Returns:
-        Canonical position name
-    """
-    aliases = getPositionAliases()
-    normalized = str(position).strip().upper().replace(" ", "-")
-    return aliases.get(normalized, normalized)
-
-
-# ============================================================================
-# Position Type Functions
-# ============================================================================
-
-def getPositionTypesConfig():
-    """Get position types configuration."""
-    return _loadYaml('positionTypes.yaml')
-
-
-def getPositionType(position):
-    """
-    Return 'front', 'back', 'dual', or 'side' for a position.
-    
-    Args:
-        position: Position name (e.g., 'LEFT-CHEST', 'FULL-BACK')
-        
-    Returns:
-        String: 'front', 'back', 'dual', or 'side'
-    """
-    config = getPositionTypesConfig()
-    
-    # Normalize position name
-    posNorm = str(position).strip().upper().replace(' ', '-').replace('_', '-')
-    
-    # Check back positions
-    backPositions = config.get('backPositions', [])
-    for bp in backPositions:
-        bpNorm = bp.upper().replace(' ', '-').replace('_', '-')
-        if bpNorm == posNorm or bpNorm in posNorm:
-            return 'back'
-    
-    # Check dual positions
-    dualPositions = config.get('dualPositions', [])
-    for dp in dualPositions:
-        dpNorm = dp.upper().replace(' ', '-').replace('_', '-').replace('&', '-')
-        if dpNorm == posNorm or dpNorm in posNorm:
-            return 'dual'
-    
-    # Check side positions
-    sidePositions = config.get('sidePositions', [])
-    for sp in sidePositions:
-        spNorm = sp.upper().replace(' ', '-').replace('_', '-')
-        if spNorm == posNorm or spNorm in posNorm:
-            return 'side'
-    
-    # Default to front
-    return 'front'
-
-
-def getFrontPositions():
-    """Get list of front-facing positions."""
-    config = getPositionTypesConfig()
-    return config.get('frontPositions', [])
-
-
-def getBackPositions():
-    """Get list of back-facing positions."""
-    config = getPositionTypesConfig()
-    return config.get('backPositions', [])
-
-
-def getDualPositions():
-    """Get list of dual-image positions."""
-    config = getPositionTypesConfig()
-    return config.get('dualPositions', [])
-
-
-# ============================================================================
-# Garment Type Functions
-# ============================================================================
-
-def getGarmentTypesConfig():
-    """Get garment types configuration."""
-    return _loadYaml('garmentTypes.yaml')
-
-
-def detectGarmentType(position, partId=None):
-    """
-    Detect garment type from position keywords or part ID prefix.
-    
-    Args:
-        position: Position/location name
-        partId: Optional part ID to check prefix
-        
-    Returns:
-        String: 'T-SHIRT', 'CAP', 'BAG', or 'BLANKET'
-    """
-    config = getGarmentTypesConfig()
-    rules = config.get('detectionRules', {})
-    
-    posNorm = str(position).upper() if position else ''
-    partIdNorm = str(partId).upper() if partId else ''
-    
-    # Check each garment type (except T-SHIRT which is default)
-    for gType in ['CAP', 'BAG', 'BLANKET']:
-        rule = rules.get(gType, {})
-        
-        # Check keywords in position
-        for keyword in rule.get('keywords', []):
-            if keyword.upper() in posNorm:
-                return gType
-        
-        # Check part ID prefix
-        for prefix in rule.get('prefixes', []):
-            if partIdNorm.startswith(prefix.upper()):
-                return gType
-    
-    # Default to T-SHIRT
-    return 'T-SHIRT'
-
-
-def getTypeAliases():
-    """Get garment type aliases."""
-    config = getGarmentTypesConfig()
-    return config.get('typeAliases', {})
-
-
-# ============================================================================
-# Filename Pattern Functions
-# ============================================================================
-
-def getFilenamePatternsConfig():
-    """Get filename patterns configuration."""
-    return _loadYaml('filenamePatterns.yaml')
-
-
-def getIgnoreWords():
-    """Get list of words to ignore in filenames."""
-    config = getFilenamePatternsConfig()
-    return [w.lower() for w in config.get('ignoreWords', [])]
-
-
-def getFrontIndicators():
-    """Get list of front image indicators."""
-    config = getFilenamePatternsConfig()
-    return [w.lower() for w in config.get('frontIndicators', [])]
-
-
-def getBackIndicators():
-    """Get list of back image indicators."""
-    config = getFilenamePatternsConfig()
-    return [w.lower() for w in config.get('backIndicators', [])]
-
-
-def getSideIndicators():
-    """Get list of side image indicators."""
-    config = getFilenamePatternsConfig()
-    return [w.lower() for w in config.get('sideIndicators', [])]
-
-
-def getAllowedExtensions():
-    """Get list of allowed image file extensions."""
-    config = getFilenamePatternsConfig()
-    exts = config.get('allowedExtensions', ['jpg', 'jpeg', 'png'])
-    return ['.' + e.lower().lstrip('.') for e in exts]
-
-
-def getViewPriority():
-    """Get view type priority for image selection."""
-    config = getFilenamePatternsConfig()
-    return config.get('viewPriority', {'front': 1, 'back': 2, 'side': 3})
-

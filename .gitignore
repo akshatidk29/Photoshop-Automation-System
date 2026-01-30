@@ -2,8 +2,4 @@ __pycache__/
 .vscode/
 Temp
 assets
-Data_
-Data_1
-Data_2
-Data_3
-Data_4
+_trainData

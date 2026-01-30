@@ -9,19 +9,16 @@ import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
+from configuration.configLoader import (
+    getCanonicalName, 
+    getPositionBehavior
+)
 
 # Model Path
 MODEL_PATH = Path(__file__).parent / "weights" / "towel" / "best.pt"
 
 # Location Mapping
-LOCATION_MAP = {
-    "CORNER-ANGLED-TOWEL": "CORNER",
-    "CORNER": "CORNER",
-    "FRONT_CENTER": "CENTER",
-    "CENTER": "CENTER",
-    "FRONT": "CENTER",
-    "FULL-FRONT": "CENTER"
-}
+# Now handled dynamically via getCanonicalName
 
 # Heuristic Config
 TOWEL_CONFIG = {
@@ -76,16 +73,26 @@ def _getRegions(imagePath):
     return _detectionCache[key]
 
 def _getObbClassName(locationName):
-    norm = normalizeLocation(locationName)
-    for key, val in LOCATION_MAP.items():
-        if key in norm: return val
-    return norm.replace("-", "_")
+    """Get OBB class name for towels from location."""
+    canonical = getCanonicalName(locationName)
+    
+    # Context-aware mapping:
+    if canonical == "CORNER-ANGLED-TOWEL": return "CORNER"
+    if canonical == "FRONT_CENTER": return "CENTER"
+    if canonical == "FULL-FRONT": return "CENTER" # "CENTER" is the default for towels
+    if canonical == "FRONT": return "CENTER"
+    
+    # Fallback to normalized name with underscores
+    return canonical.replace("-", "_").replace(" ", "_")
 
 def _getConfigForLocation(locationName):
     """Get heuristic config."""
-    norm = normalizeLocation(locationName)
+    norm = getCanonicalName(locationName)
     if "CORNER" in norm: return TOWEL_CONFIG["CORNER"]
     if "CENTER" in norm or "FRONT" in norm: return TOWEL_CONFIG["CENTER"]
+    # Add check for specific canonical names
+    if norm == "FRONT_CENTER": return TOWEL_CONFIG["CENTER"]
+    
     return TOWEL_CONFIG["DEFAULT"]
 
 # ============================================================================
@@ -138,33 +145,33 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     return _getHeuristicCoordinates(imagePath, locationName)
 
 def getRotation(imagePath, locationName):
-    # 1. Try OBB
+    """
+    Get rotation angle (degrees).
+    Uses behavior flags from registry.
+    """
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    if rotationMode == 'fixed_45':
+        return -45.0 # Check sign: usually negative for CCW? Or positive?
+        # Detectors use negative angle from OBB. If standard is -45, this should be -45.
+        
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         if targetClass in regions:
             return -regions[targetClass].angle
-    except: pass
+    except: 
+        pass
     
-    # 2. Fallback
+    # Fallback to heuristic config (legacy support)
     config = _getConfigForLocation(locationName)
     return config["rotation"]
 
 def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    # 1. Try OBB Logic if available? (Usually Towel depends on towel width)
-    # Sticking to heuristic scale for towels as it's percentage based
-    try:
-        bx, by, bw, bh = _getProductBoundingBox(imagePath)
-    except:
-        return baseSize
-        
-    config = _getConfigForLocation(locationName)
-    targetWidth = int(bw * config["scaleRatio"])
-    
-    baseW, baseH = baseSize
-    if baseW == 0: baseW = 100
-    
-    ratio = targetWidth / baseW
-    targetHeight = int(baseH * ratio)
-    
-    return (targetWidth, targetHeight)
+    """
+    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
+    """
+    return (99, 99)
