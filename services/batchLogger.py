@@ -41,13 +41,13 @@ class BatchLogger:
         self.batchName = batchName
         self.startTime = datetime.datetime.now()
         
-        # Setup log directory
-        self.logDir = os.path.join(outputDir, "logs")
+        # Setup log directory - Directly use outputDir as requested
+        self.logDir = outputDir
         ensureFolder(self.logDir)
         
         # Log file path
         timestamp = self.startTime.strftime("%Y%m%d_%H%M%S")
-        self.logPath = os.path.join(self.logDir, f"{batchName}_{timestamp}_batch.log")
+        self.logPath = os.path.join(self.logDir, f"{batchName}_batch.log")
         
         # Track entries
         self.entries: List[Dict[str, Any]] = []

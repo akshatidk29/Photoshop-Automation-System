@@ -4,7 +4,8 @@ from datetime import datetime
 # Base directory configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGS_DIR = os.path.join(BASE_DIR, "assets", "logs")
-OUTPUT_DIR = os.path.join(BASE_DIR, "assets", "output")
+OUTPUT_ROOT = os.path.join(BASE_DIR, "Output")
+OUTPUT_DIR = os.path.join(BASE_DIR, "assets", "output") # Kept for backward compatibility if needed, but mainly we use OUTPUT_ROOT now
 IMAGE_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "For Printing")
 PSD_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "photoshop")
 

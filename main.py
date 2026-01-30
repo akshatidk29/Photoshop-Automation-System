@@ -11,14 +11,14 @@ from tkinter import filedialog, messagebox
 import threading
 import time
 import shutil
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image
 
 from services.excelReader import readExcel
 from locators.imageLocator import findImageCandidates
 from locators.logoLocator import findLogo
 
 # New two-phase processing services
-from services.excelPreProcessor import preProcessExcel, EnrichedColumns, PreProcessingStatus
+from services.excelPreProcessor import preProcessExcel, EnrichedColumns, PreProcessingStatus, saveEnrichedCsv
 from services.batchLogger import BatchLogger, LogCategory
 from services.imageProcessor import ImageProcessor
 
@@ -32,7 +32,7 @@ from detectors.comboParser import parseComboPosition
 # Core/Utils
 from photoshop.batchManager import PhotoshopBatchManager
 from core.utils import detectGarmentTypeFromLocation, parseCustomSize, normalizeLocation
-from core.config import BASE_DIR
+from core.config import BASE_DIR, OUTPUT_ROOT
 from services.logger import logError, RowLogger
 
 # Configuration
@@ -156,108 +156,17 @@ class AutomationApp(ctk.CTk):
             'border_focus': '#60a5fa'
         }
         
-        # Background handling
-        self.bgImage = None
-        self.bgLabel = None
         
-        self._loadBackground()  # Load background FIRST
-        self._buildUI()  # Then build UI on top
+        # Background handling - Removed as per request for minimal UI
+        # self.bgImage = None
+        # self.bgLabel = None
+        
+        self._buildUI()  # Build UI
         self._updateStatus()
     
-    def _loadBackground(self):
-        """Load and set background image with fallback."""
-        from tkinter import Canvas
-        
-        try: 
-            possiblePaths = [
-                "photoshopAutomation.png",  # Current directory
-                os.path.join(os.getcwd(), "photoshopAutomation.png"),  # Current working directory
-                os.path.join(BASE_DIR, "photoshopAutomation.png"),  # Base directory
-                os.path.join(os.path.dirname(__file__), "photoshopAutomation.png"),  # Script directory
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "photoshopAutomation.png"),  # Absolute script dir
-            ]
-            
-            bgPath = None
-            print("\n[BACKGROUND] Searching for photoshopAutomation.png...")
-            for path in possiblePaths:
-                print(f"[BACKGROUND] Checking: {path}")
-                if os.path.exists(path):
-                    bgPath = path
-                    print(f"[BACKGROUND] ✓ Found at: {bgPath}")
-                    break
-            
-            if bgPath:
-                print(f"[BACKGROUND] Loading image from: {bgPath}")
-                # Load image
-                img = Image.open(bgPath)
-                print(f"[BACKGROUND] Image loaded: {img.size}")
-                
-                # Resize to window size
-                img = img.resize((1200, 800), Image.Resampling.LANCZOS)
-                
-                # Apply blur for subtle background
-                img = img.filter(ImageFilter.GaussianBlur(radius=10))
-                
-                # Darken significantly for readability
-                enhancer = ImageEnhance.Brightness(img)
-                img = enhancer.enhance(0.25)
-                
-                # Use CTkImage for the background
-                self.bgImage = ctk.CTkImage(light_image=img, dark_image=img, size=(1200, 800))
-                print("[BACKGROUND] CTkImage created successfully")
-                
-                # Create canvas for background
-                if self.bgLabel is None:
-                    # Use Canvas which is more reliable for background images
-                    canvas = Canvas(self, width=1200, height=800, highlightthickness=0)
-                    canvas.place(x=0, y=0)
-                    
-                    # Convert to PhotoImage for canvas
-                    from PIL import ImageTk
-                    photo = ImageTk.PhotoImage(img)
-                    self.bgImage = photo  # Keep reference
-                    canvas.create_image(0, 0, image=photo, anchor='nw')
-                    self.bgLabel = canvas
-                    print("[BACKGROUND] Canvas background created and placed")
-                
-                return
-            else:
-                print("[BACKGROUND] ✗ Image file not found in any location")
-                print(f"[BACKGROUND] Current directory: {os.getcwd()}")
-                print(f"[BACKGROUND] Script directory: {os.path.dirname(os.path.abspath(__file__))}")
-                print(f"[BACKGROUND] BASE_DIR: {BASE_DIR}")
-        except Exception as e:
-            print(f"[BACKGROUND] Error loading image: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Fallback: Create subtle gradient using canvas
-        print("[BACKGROUND] Using fallback gradient background")
-        try:
-            # Create dark gradient background
-            img = Image.new('RGB', (1200, 800), color='#0a0e12')
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(img)
-            
-            # Create subtle gradient effect
-            for i in range(800):
-                color_value = int(10 + (i / 800) * 15)  # 10 to 25
-                color = f'#{color_value:02x}{color_value+2:02x}{color_value+5:02x}'
-                draw.line([(0, i), (1200, i)], fill=color)
-            
-            # Create canvas for gradient
-            if self.bgLabel is None:
-                canvas = Canvas(self, width=1200, height=800, highlightthickness=0)
-                canvas.place(x=0, y=0)
-                
-                from PIL import ImageTk
-                photo = ImageTk.PhotoImage(img)
-                self.bgImage = photo
-                canvas.create_image(0, 0, image=photo, anchor='nw')
-                self.bgLabel = canvas
-                print("[BACKGROUND] Gradient canvas background applied")
-        except Exception as e:
-            print(f"[BACKGROUND] Gradient background failed: {e}")
+    
+    # _loadBackground method removed as per request for minimal UI
+
     
     def _buildUI(self):
         """Build the premium UI - ultra compact."""
@@ -976,11 +885,16 @@ class AutomationApp(ctk.CTk):
     
     def _clearOutput(self):
         """Clear output folder."""
-        outputDir = os.path.join(BASE_DIR, "assets", "output")
-        if os.path.exists(outputDir):
+        # Delete all output{i} folders in Output directory
+        if os.path.exists(OUTPUT_ROOT):
             try:
-                shutil.rmtree(outputDir)
-                os.makedirs(outputDir)
+                for item in os.listdir(OUTPUT_ROOT):
+                    itemPath = os.path.join(OUTPUT_ROOT, item)
+                    if os.path.isdir(itemPath) and item.lower().startswith("output"):
+                        try:
+                            shutil.rmtree(itemPath)
+                        except:
+                            pass
             except:
                 pass
     
@@ -1004,7 +918,7 @@ class AutomationApp(ctk.CTk):
             messagebox.showinfo(
                 "Success",
                 "Automation completed successfully!\n\n"
-                "Check 'assets/output/' for results."
+                "Check 'Output/' for results."
             )
         elif success:
             if messagebox.askyesno(
@@ -1068,8 +982,26 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
         print(f"[ERROR] Excel file not found: {excelPath}")
         return False
     
-    # Setup output directory for logs
-    outputDir = os.path.join(BASE_DIR, "assets")
+    # Setup output directory
+    if not os.path.exists(OUTPUT_ROOT):
+        os.makedirs(OUTPUT_ROOT)
+        
+    # Find next available output folder
+    i = 1
+    while True:
+        outputDir = os.path.join(OUTPUT_ROOT, f"output{i}")
+        if not os.path.exists(outputDir):
+            break
+        i += 1
+    
+    os.makedirs(outputDir)
+    print(f"[INFO] Created output directory: {outputDir}")
+    
+    # Copy Excel file to output directory
+    try:
+        shutil.copy2(excelPath, outputDir)
+    except Exception as e:
+        print(f"[WARNING] Failed to copy Excel file: {e}")
     
     # Get settings
     logoSizesConfig = settings.get('logoSizes', {})
@@ -1107,6 +1039,10 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
     if result['stats']['valid'] == 0:
         print("[ERROR] No valid rows to process after pre-processing")
         return False
+        
+    # Save pre-processed data for debugging/reference
+    csvPath = os.path.join(outputDir, "preprocessed.csv")
+    saveEnrichedCsv(result['enrichedRows'], csvPath)
     
     # ========================================================================
     # PHASE 2: Process Enriched Rows
@@ -1125,7 +1061,8 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
     processed = 0
     failed = 0
     
-    batchMgr = PhotoshopBatchManager(maxItemsPerBatch=100)
+    # Pass outputDir to manager
+    batchMgr = PhotoshopBatchManager(outputDir=outputDir, maxItemsPerBatch=100)
     enrichedRows = result['enrichedRows']
     totalRows = len(enrichedRows)
     

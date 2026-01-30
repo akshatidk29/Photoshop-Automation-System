@@ -9,7 +9,7 @@ from .photoshopEngine import preparePairDoc, prepareComboPairDoc
 class PhotoshopBatchManager:
     """Manages batch processing of images in Photoshop."""
     
-    def __init__(self, maxItemsPerBatch=100):
+    def __init__(self, outputDir=None, maxItemsPerBatch=100):
         print("Initializing PhotoshopBatchManager...")
         pythoncom.CoInitialize()
         self.app = win32com.client.Dispatch("Photoshop.Application")
@@ -18,6 +18,16 @@ class PhotoshopBatchManager:
         self.itemsInBatch = 0
         self.batchDoc = None
         self.maxItems = maxItemsPerBatch
+        self.outputDir = outputDir
+        
+        # Determine paths based on provided outputDir or defaults
+        if self.outputDir:
+            self.psdOutputDir = os.path.join(self.outputDir, "photoshop")
+            self.imageOutputDir = os.path.join(self.outputDir) # Images go directly or in folders inside here
+        else:
+            self.psdOutputDir = PSD_OUTPUT_DIR
+            self.imageOutputDir = IMAGE_OUTPUT_DIR
+            
         print("PhotoshopBatchManager initialized.")
 
     def _saveAndCloseBatch(self):
@@ -25,9 +35,9 @@ class PhotoshopBatchManager:
         if not self.batchDoc:
             return
         try:
-            os.makedirs(PSD_OUTPUT_DIR, exist_ok=True)
+            os.makedirs(self.psdOutputDir, exist_ok=True)
             batchName = f"Batch_{self.batchIndex}.psd"
-            psdPath = os.path.join(PSD_OUTPUT_DIR, batchName)
+            psdPath = os.path.join(self.psdOutputDir, batchName)
             options = win32com.client.Dispatch("Photoshop.PhotoshopSaveOptions")
             self.batchDoc.SaveAs(psdPath, options, True)
             try:
@@ -94,7 +104,7 @@ class PhotoshopBatchManager:
             canvasWidth = 1200
             canvasFolder = f"{canvasWidth} x {canvasHeight}"
 
-            forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)
+            forPrintingDir = os.path.join(self.imageOutputDir, canvasFolder)
             os.makedirs(forPrintingDir, exist_ok=True)
 
             jpgFilename = finalName.replace('.jpg', '') if finalName.endswith('.jpg') else finalName
@@ -241,7 +251,7 @@ class PhotoshopBatchManager:
             canvasWidth = 1200
             canvasFolder = f"{canvasWidth} x {canvasHeight}"
 
-            forPrintingDir = os.path.join(IMAGE_OUTPUT_DIR, canvasFolder)
+            forPrintingDir = os.path.join(self.imageOutputDir, canvasFolder)
             os.makedirs(forPrintingDir, exist_ok=True)
 
             jpgFilename = finalName.replace('.jpg', '') if finalName.endswith('.jpg') else finalName

@@ -39,35 +39,15 @@ class RowLogger:
     def __init__(self, index, name):
         self.index = index
         self.name = cleanFilename(name)
-        
-        # Setup path
-        baseDir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.logFolder = os.path.join(baseDir, "assets", "logs")
-        ensureFolder(self.logFolder)
-        
-        self.filePath = os.path.join(self.logFolder, f"row_{index}_{self.name}.log")
-        
-        # Initialize
-        with open(self.filePath, "w", encoding="utf-8") as f:
-            f.write(f"Processing Log for Row {index}: {name}\n")
-            f.write("=" * 60 + "\n\n")
+        # No longer creating individual log files per row
             
     def log(self, message):
         """Log info message."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        line = f"[{timestamp}] {message}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        # Console only
+        pass
 
     def step(self, stepName, details=""):
         """Log a processing step with clear formatting."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        if details:
-            line = f"[{timestamp}] ► {stepName}: {details}"
-        else:
-            line = f"[{timestamp}] ► {stepName}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
         print(f"    ► {stepName}" + (f": {details}" if details else ""))
 
     def error(self, message, reason=""):
@@ -75,40 +55,22 @@ class RowLogger:
         Log error message with optional reason.
         This will be shown to user in console.
         """
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        
         if reason:
             fullMessage = f"{message} — Reason: {reason}"
         else:
             fullMessage = message
-            
-        line = f"[{timestamp}] ✗ ERROR: {fullMessage}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
         
         # User-friendly console message
         print(f"    ✗ FAILED: {fullMessage}")
         
     def success(self, message):
         """Log success message."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        line = f"[{timestamp}] ✓ SUCCESS: {message}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
         print(f"    ✓ {message}")
 
     def warn(self, message):
         """Log warning message."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        line = f"[{timestamp}] ⚠ WARNING: {message}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
         print(f"    ⚠ {message}")
 
     def fallback(self, message, fallbackUsed):
         """Log when a fallback option was used (e.g., model didn't predict)."""
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        line = f"[{timestamp}] ⟳ FALLBACK: {message} → Using: {fallbackUsed}"
-        with open(self.filePath, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
         print(f"    ⟳ FALLBACK: {message} → {fallbackUsed}")
