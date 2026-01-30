@@ -238,17 +238,58 @@ def computeLogoSize(garmentType: str, logoPath: str, location: str) -> Tuple[flo
 
 
 def parseCustomSize(sizeText):
-    """Returns (width, height) tuple or single width value if valid, else None.
+    """Returns parsed size(s) from text. Supports multiple formats:
     
-    Accepts formats like:
+    Single size formats:
     - "150x200" or "150 x 200" → (150.0, 200.0)
-    - "150" → 150.0 (width-only, height calculated by aspect ratio downstream)
+    - "150" → 150.0 (width-only)
+    
+    Multiple sizes (comma-separated) for multi-position:
+    - "99,120" → [99.0, 120.0]
+    - "99x150,120x180" → [(99.0, 150.0), (120.0, 180.0)]
+    - "99,120x180" → [99.0, (120.0, 180.0)]  (mixed)
+    
+    Returns:
+    - None if invalid
+    - float for single width
+    - tuple (width, height) for single WxH
+    - list of floats/tuples for comma-separated multiple sizes
     """
     if not sizeText:
         return None
 
-    text = str(sizeText).strip().lower()
+    text = str(sizeText).strip()
 
+    if text.lower() in ["nan", "none", "-", ""]:
+        return None
+
+    # Check for comma-separated multiple sizes
+    if "," in text:
+        parts = [p.strip() for p in text.split(",")]
+        sizes = []
+        for part in parts:
+            parsed = _parseSingleSize(part)
+            if parsed is not None:
+                sizes.append(parsed)
+        # Return list only if we got valid sizes
+        return sizes if sizes else None
+    
+    # Single size
+    return _parseSingleSize(text)
+
+
+def _parseSingleSize(text):
+    """Parse a single size value (helper for parseCustomSize).
+    
+    Returns:
+    - float for width-only (e.g., "150")
+    - tuple (width, height) for WxH (e.g., "150x200")
+    - None if invalid
+    """
+    if not text:
+        return None
+    
+    text = str(text).strip().lower()
     if text in ["nan", "none", "-", ""]:
         return None
 
@@ -256,9 +297,8 @@ def parseCustomSize(sizeText):
     if len(match) == 2:
         width = float(match[0])
         height = float(match[1])
-        return width, height
+        return (width, height)
     elif len(match) == 1:
-        # Single number = width only
         return float(match[0])
 
     return None

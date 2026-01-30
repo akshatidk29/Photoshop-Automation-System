@@ -17,10 +17,12 @@ detectionRules:
     keywords:
       - CROWN
       - CAP
-    # Part ID prefixes that indicate caps (e.g., C112, CP80)
+      - HAT
+    # Part ID prefixes that indicate caps
+    # NOTE: Only use specific prefixes - 'C' alone is too broad (matches Carhartt 'CT' shirts)
     prefixes:
-      - C
       - CP
+      - CAP
     
   BAG:
     keywords:

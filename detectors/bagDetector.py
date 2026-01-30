@@ -11,7 +11,8 @@ from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
 from configuration.configLoader import (
     getCanonicalName, 
-    getPositionBehavior
+    getPositionBehavior,
+    getObbClassName
 )
 
 # Model Path
@@ -48,22 +49,10 @@ def _getRegions(imagePath):
     return _detectionCache[key]
 
 # Location Mapping: Excel Name -> OBB Class Name
-# Now handled dynamically via getCanonicalName
+# Now handled via getObbClassName from configLoader
 def _getObbClassName(locationName):
-    """Get OBB class name for bags from location."""
-    canonical = getCanonicalName(locationName)
-    
-    # Context-aware mapping:
-    # "FRONT" on a bag usually means "FRONT (ON BAG)"
-    if canonical == "FULL-FRONT": return "FRONT" # "FRONT" is the OBB class
-    if canonical == "FRONT (ON BAG)": return "FRONT"
-    
-    # "POCKET" on a bag usually means "ON POCKET (ON BAG)"
-    if canonical == "ON-POCKET": return "ON_POCKET" # "ON_POCKET" is the OBB class
-    if canonical == "ON POCKET (ON BAG)": return "ON_POCKET"
-    
-    # Fallback to normalized name with underscores
-    return canonical.replace("-", "_").replace(" ", "_").replace("(", "").replace(")", "")
+    """Get OBB class name for bags from location (uses config)."""
+    return getObbClassName(locationName)
 
 # ============================================================================
 # Heuristic Fallback Logic

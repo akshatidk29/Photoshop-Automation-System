@@ -12,7 +12,8 @@ from pathlib import Path
 from detectors.inference import InferenceEngine
 from configuration.configLoader import (
     getCanonicalName, 
-    getPositionBehavior
+    getPositionBehavior,
+    getObbClassName
 )
 
 # Model Path
@@ -52,12 +53,10 @@ def _getRegions(imagePath):
     return _detectionCache[key]
 
 # Location Mapping: Excel Name -> OBB Class Name
-# Now handled dynamically via getCanonicalName
+# Now handled via getObbClassName from configLoader
 def _getObbClassName(locationName):
-    """Get OBB class name for garments from location."""
-    canonical = getCanonicalName(locationName)
-    # Convert canonical name (e.g., "FULL-FRONT") to model class name (e.g., "FULL_FRONT")
-    return canonical.replace("-", "_").replace(" ", "_")
+    """Get OBB class name for garments from location (uses config)."""
+    return getObbClassName(locationName)
 
 def _normalizeLocation(locationName):
     """Normalize location name."""

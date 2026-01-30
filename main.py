@@ -1129,7 +1129,8 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
         if not positions:
             positions = [locationName.upper().replace(" ", "-")]
         
-        positions.sort()
+        # NOTE: Do NOT sort positions - this breaks alignment with logoSizes list
+        # logoSizes are resolved in original position order during pre-processing
         isCombo = len(positions) > 1
         
         detector = getDetector(garmentType)

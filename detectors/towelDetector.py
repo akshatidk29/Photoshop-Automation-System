@@ -11,7 +11,8 @@ from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
 from configuration.configLoader import (
     getCanonicalName, 
-    getPositionBehavior
+    getPositionBehavior,
+    getObbClassName
 )
 
 # Model Path

@@ -11,7 +11,8 @@ from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
 from configuration.configLoader import (
     getCanonicalName, 
-    getPositionBehavior
+    getPositionBehavior,
+    getObbClassName
 )
 
 # Model Path
@@ -51,21 +52,10 @@ def _getRegions(imagePath):
     return _detectionCache[key]
 
 # Location Mapping: Excel Name -> OBB Class Name
-# Now handled dynamically via getCanonicalName
+# Now handled via getObbClassName from configLoader
 def _getObbClassName(locationName):
-    """Get OBB class name for caps from location."""
-    canonical = getCanonicalName(locationName)
-    
-    # Handle context-aware mappings (if user passes generic names like "BACK")
-    if canonical == "FULL-BACK": return "CAP_BACK"
-    if canonical == "FULL-FRONT": return "FRONT_CROWN"
-    if canonical == "LEFT-SIDE": return "CAP_SIDE"
-    if canonical == "RIGHT-SIDE": return "CAP_SIDE"
-    
-    # Check map for specific cap positions
-    # If the canonical name is already a cap position (e.g. FRONT-CROWN)
-    # just return it with underscores
-    return canonical.replace("-", "_").replace(" ", "_")
+    """Get OBB class name for caps from location (uses config)."""
+    return getObbClassName(locationName)
 
 # ============================================================================
 # Heuristic Fallback Logic

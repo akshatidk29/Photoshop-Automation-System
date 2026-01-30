@@ -137,6 +137,34 @@ def getPositionData(positionName):
     return registry.get('positions', {}).get(canonical, {})
 
 
+def getObbClassName(positionName):
+    """
+    Get the OBB model class name for a position.
+    
+    Priority:
+    1. Explicit 'obbClass' field in positionRegistry.yaml
+    2. Normalized canonical name (replace hyphens/spaces with underscores)
+    
+    Args:
+        positionName: Position name (any variation)
+        
+    Returns:
+        OBB class name string (e.g., "FRONT", "LEFT_CHEST", "ON_POCKET")
+    """
+    canonical = getCanonicalName(positionName)
+    data = getPositionData(positionName)
+    
+    # Check for explicit obbClass mapping
+    if data and 'obbClass' in data:
+        return data['obbClass']
+    
+    # Default: normalize canonical name to model format
+    # Replace hyphens, spaces, parentheses with underscores
+    obbClass = canonical.replace("-", "_").replace(" ", "_")
+    obbClass = obbClass.replace("(", "").replace(")", "")
+    return obbClass
+
+
 def getGarmentType(positionName, partId=None):
     """
     Determine garment type (T-SHIRT, CAP, BAG, BLANKET) from position.
@@ -157,14 +185,63 @@ def getGarmentType(positionName, partId=None):
     posNorm = str(positionName).upper()
     partIdNorm = str(partId).upper() if partId else ""
     
-    if "BAG" in posNorm or partIdNorm.startswith("BG"):
-        return "BAG"
-    if "CAP" in posNorm or "CROWN" in posNorm or partIdNorm.startswith("C") or partIdNorm.startswith("CP"):
-        return "CAP"
-    if "TOWEL" in posNorm or "BLANKET" in posNorm or partIdNorm.startswith("BP"):
-        return "BLANKET"
+    # Load detection rules from garmentTypes.yaml
+    garmentTypesConfig = _loadYaml('garmentTypes.yaml')
+    rules = garmentTypesConfig.get('detectionRules', {})
+    
+    # Check each garment type's rules (except T-SHIRT which is default)
+    for gType in ['BAG', 'CAP', 'BLANKET']:
+        typeRules = rules.get(gType, {})
+        keywords = typeRules.get('keywords', [])
+        prefixes = typeRules.get('prefixes', [])
+        
+        # Check keywords in position name
+        for keyword in keywords:
+            if keyword.upper() in posNorm:
+                return gType
+        
+        # Check prefixes in part ID (only if partId provided)
+        if partIdNorm:
+            for prefix in prefixes:
+                if partIdNorm.startswith(prefix.upper()):
+                    return gType
         
     return "T-SHIRT"
+
+
+def getGarmentTypeForPositions(positions, partId=None):
+    """
+    Determine garment type from a LIST of parsed canonical positions.
+    Uses the first valid position's type from the registry.
+    
+    This is more reliable than checking the raw location string because:
+    1. Positions are already parsed and canonical
+    2. Each position has a defined type in positionRegistry.yaml
+    3. Avoids false positives from Part ID heuristics
+    
+    Args:
+        positions: List of canonical position names (e.g., ['RIGHT-CHEST', 'LEFT-CHEST'])
+        partId: Optional part ID for fallback (only used if NO positions have types)
+        
+    Returns:
+        Garment Type string
+    """
+    if not positions:
+        return "T-SHIRT"
+    
+    registry = getPositionRegistry()
+    positionsData = registry.get('positions', {})
+    
+    # Check each position for its type
+    for pos in positions:
+        if pos in positionsData:
+            posData = positionsData[pos]
+            if 'type' in posData:
+                return posData['type']
+    
+    # If no position had a type, try the original getGarmentType with first position
+    # This handles unknown positions with Part ID fallback
+    return getGarmentType(positions[0], partId)
 
 
 def getPositionBehavior(positionName):

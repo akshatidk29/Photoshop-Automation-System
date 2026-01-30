@@ -6,14 +6,18 @@
 #   2. Aliases/Variations mapping to canonical names
 #   3. Garment Type association (T-SHIRT, CAP, BAG, BLANKET)
 #   4. Behavior flags for detectors (rotation, reference axis, mirroring)
+#   5. OBB class names for model detection (optional, defaults to normalized name)
+#   6. View type for image selection (front, back, side)
 #
 # SCHEMA:
 #   CANONICAL-NAME:
 #     type: [T-SHIRT, CAP, BAG, BLANKET]
+#     view: [front, back, side]           # Optional, defaults to 'front'
+#     obbClass: MODEL_CLASS_NAME          # Optional, for model detection
 #     aliases: [LIST, OF, VARIATIONS]
 #     behavior:
-#       rotation: [standard, vertical_lock, fixed_0, fixed_90]
-#       reference: [vertical, horizontal]
+#       rotation: [standard, vertical_lock, fixed_0, fixed_90, fixed_45]
+#       reference: [vertical, horizontal, diagonal]
 #       mirror: [true, false]
 # ==============================================================================
 
@@ -23,7 +27,7 @@ positions:
   # ----------------------------------------------------------------------------
   FULL-FRONT:
     type: T-SHIRT
-    aliases: ["FRONT", "CENTER-FRONT", "CHEST-CENTER", "FULL FRONT"]
+    aliases: ["FRONT", "CENTER-FRONT", "CHEST-CENTER", "FULL FRONT", "FF"]
     behavior:
       rotation: standard
       reference: vertical
@@ -31,91 +35,91 @@ positions:
   FULL-BACK:
     type: T-SHIRT
     view: back
-    aliases: ["BACK", "CENTER-BACK", "FULL BACK"]
+    aliases: ["BACK", "CENTER-BACK", "FULL BACK", "FB"]
     behavior:
       rotation: standard
       reference: vertical
 
   LEFT-CHEST:
     type: T-SHIRT
-    aliases: ["L-CHEST", "CHEST-LEFT", "LC"]
+    aliases: ["L-CHEST", "CHEST-LEFT", "LC", "LFT-CHEST", "LFT CHEST", "LEFT CHEST"]
     behavior:
       rotation: standard
       reference: vertical
 
   RIGHT-CHEST:
     type: T-SHIRT
-    aliases: ["R-CHEST", "CHEST-RIGHT", "RC"]
+    aliases: ["R-CHEST", "CHEST-RIGHT", "RC", "RGT-CHEST", "RGT CHEST", "RIGHT CHEST"]
     behavior:
       rotation: standard
       reference: vertical
 
   LEFT-BICEP:
     type: T-SHIRT
-    aliases: ["L-BICEP", "BICEP-LEFT", "LB", "LEFT BICEP"]
+    aliases: ["L-BICEP", "BICEP-LEFT", "LB", "LEFT BICEP", "LFT-BICEP", "LFT BICEP"]
     behavior:
       rotation: vertical_lock
       reference: vertical
 
   RIGHT-BICEP:
     type: T-SHIRT
-    aliases: ["R-BICEP", "BICEP-RIGHT", "RB", "RIGHT BICEP"]
+    aliases: ["R-BICEP", "BICEP-RIGHT", "RB", "RIGHT BICEP", "RGT-BICEP", "RGT BICEP"]
     behavior:
       rotation: vertical_lock
       reference: vertical
 
   LEFT-SLEEVE:
     type: T-SHIRT
-    aliases: ["L-SLEEVE", "SLEEVE-LEFT", "LS", "LEFT SLEEVE"]
+    aliases: ["L-SLEEVE", "SLEEVE-LEFT", "LS", "LEFT SLEEVE", "LFT-SLEEVE", "LFT SLEEVE"]
     behavior:
       rotation: vertical_lock
       reference: vertical
 
   RIGHT-SLEEVE:
     type: T-SHIRT
-    aliases: ["R-SLEEVE", "SLEEVE-RIGHT", "RS", "RIGHT SLEEVE"]
+    aliases: ["R-SLEEVE", "SLEEVE-RIGHT", "RS", "RIGHT SLEEVE", "RGT-SLEEVE", "RGT SLEEVE"]
     behavior:
       rotation: vertical_lock
       reference: vertical
 
   LEFT-COLLAR:
     type: T-SHIRT
-    aliases: ["L-COLLAR", "COLLAR-LEFT"]
+    aliases: ["L-COLLAR", "COLLAR-LEFT", "LFT-COLLAR"]
     behavior:
       rotation: standard
       reference: horizontal
 
   RIGHT-COLLAR:
     type: T-SHIRT
-    aliases: ["R-COLLAR", "COLLAR-RIGHT"]
+    aliases: ["R-COLLAR", "COLLAR-RIGHT", "RGT-COLLAR"]
     behavior:
       rotation: standard
       reference: horizontal
 
   LEFT-CUFF:
     type: T-SHIRT
-    aliases: ["L-CUFF", "CUFF-LEFT"]
+    aliases: ["L-CUFF", "CUFF-LEFT", "LFT-CUFF"]
     behavior:
       rotation: standard
       reference: horizontal
 
   RIGHT-CUFF:
     type: T-SHIRT
-    aliases: ["R-CUFF", "CUFF-RIGHT"]
+    aliases: ["R-CUFF", "CUFF-RIGHT", "RGT-CUFF"]
     behavior:
       rotation: standard
       reference: horizontal
 
   LEFT-HIP:
     type: T-SHIRT
-    aliases: ["L-HIP", "HIP-LEFT"]
+    aliases: ["L-HIP", "HIP-LEFT", "LFT-HIP"]
     behavior:
       rotation: standard
       reference: vertical
 
   RIGHT-HIP:
     type: T-SHIRT
-    aliases: ["R-HIP", "HIP-RIGHT"]
+    aliases: ["R-HIP", "HIP-RIGHT", "RGT-HIP"]
     behavior:
       rotation: standard
       reference: vertical
@@ -201,6 +205,7 @@ positions:
   # ----------------------------------------------------------------------------
   "FRONT (ON BAG)":
     type: BAG
+    obbClass: FRONT
     aliases: ["BAG-FRONT", "BAG-FRONT-SIDE", "FRONT-ON-BAG", "FRONT-BAG", "FRONT-OF-BAG"]
     behavior:
       rotation: fixed_0
@@ -208,7 +213,8 @@ positions:
 
   "ON POCKET (ON BAG)":
     type: BAG
-    aliases: ["BAG-POCKET", "POCKET-ON-BAG", "ON-POCKET-ON-BAG", "ON-POCKET-BAG", "BAG-ON-POCKET"]
+    obbClass: ON_POCKET
+    aliases: ["BAG-POCKET", "POCKET-ON-BAG", "ON-POCKET-ON-BAG", "ON-POCKET-BAG", "BAG-ON-POCKET","ON-BAG-POCKET"]
     behavior:
       rotation: fixed_0
       reference: horizontal
@@ -239,27 +245,18 @@ positions:
 
 
 # ==============================================================================
-# COMBO POSITIONS (Dual Image or Multi-Placement)
-# These map a single Excel string to a LIST of Canonical Names defined above.
+# COMBO POSITIONS (DEPRECATED)
 # ==============================================================================
-comboMappings:
-  "FULL-BACK & FULL-FRONT":             ["FULL-BACK", "FULL-FRONT"]
-  "FULL-FRONT-FULL-BACK":               ["FULL-FRONT", "FULL-BACK"]
-  "FULL-BACK-FULL-FRONT":               ["FULL-BACK", "FULL-FRONT"]
-  
-  "LEFT-BICEP-RIGHT-BICEP":             ["LEFT-BICEP", "RIGHT-BICEP"]
-  "LEFT-SLEEVE-RIGHT-SLEEVE":           ["LEFT-SLEEVE", "RIGHT-SLEEVE"]
-  
-  "LEFT-CHEST-RIGHT-BICEP":             ["LEFT-CHEST", "RIGHT-BICEP"]
-  "LEFT-CHEST-RIGHT-SLEEVE":            ["LEFT-CHEST", "RIGHT-SLEEVE"]
-  "LEFT-CHEST-FULL-BACK":               ["LEFT-CHEST", "FULL-BACK"]
-  
-  "RIGHT-CHEST-LEFT-BICEP":             ["RIGHT-CHEST", "LEFT-BICEP"]
-  "RIGHT-CHEST-LEFT-SLEEVE":            ["RIGHT-CHEST", "LEFT-SLEEVE"]
-  "RIGHT-CHEST-FULL-BACK":              ["RIGHT-CHEST", "FULL-BACK"]
-  
-  "LEFT-CHEST-LEFT-BICEP-RIGHT-BICEP":  ["LEFT-CHEST", "LEFT-BICEP", "RIGHT-BICEP"]
-  "RIGHT-CHEST-LEFT-BICEP-RIGHT-BICEP": ["RIGHT-CHEST", "LEFT-BICEP", "RIGHT-BICEP"]
-  
-  # Handles typo from user request history
-  "RIGHT-CHEST-LFT-BICEP-RIGHT-BICEP":  ["RIGHT-CHEST", "LEFT-BICEP", "RIGHT-BICEP"]
+# These mappings are NO LONGER NEEDED because the smart parser automatically
+# detects multiple positions from ANY input format:
+#   - "Left Chest Right Bicep" -> ["LEFT-CHEST", "RIGHT-BICEP"]
+#   - "LEFT-CHEST-RIGHT-BICEP" -> ["LEFT-CHEST", "RIGHT-BICEP"]
+#   - "LC & RB"                -> ["LEFT-CHEST", "RIGHT-BICEP"]
+#   - "LFT-CHEST-RGT-BICEP"    -> ["LEFT-CHEST", "RIGHT-BICEP"]
+#
+# The parser uses position ALIASES defined above to handle abbreviations
+# (LFT, RGT, L-, R-, LC, RC, etc.) automatically.
+#
+# If a specific combo format needs special handling in the future, add it here:
+# ==============================================================================
+comboMappings: {}

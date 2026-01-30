@@ -16,10 +16,11 @@ from detectors.comboParser import parseComboPosition
 
 # Try to import config functions
 try:
-    from configuration.configLoader import getLogoSizeForPosition, getAllLogoSizes
+    from configuration.configLoader import getLogoSizeForPosition, getAllLogoSizes, getGarmentTypeForPositions
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
+    getGarmentTypeForPositions = None
 
 
 class EnrichedColumns:
@@ -89,6 +90,11 @@ def _resolveLogoSizesForPositions(positions: List[str], customLogoSize: str,
     """
     Resolve logo sizes for multiple positions.
     
+    Supports:
+    - Single Excel size applied to all positions: "120" or "120x180"
+    - Comma-separated sizes for each position: "99,120" or "99x150,120x180"
+    - If fewer Excel sizes than positions, remaining positions use config defaults
+    
     Returns:
         tuple: (sizes_list, any_fallback_used, fallback_reasons)
     """
@@ -96,12 +102,46 @@ def _resolveLogoSizesForPositions(positions: List[str], customLogoSize: str,
     anyFallback = False
     reasons = []
     
-    for pos in positions:
-        size, fallback, reason = _resolveLogoSize(pos, customLogoSize, useExcelLogoSize, logoSizesConfig)
-        sizes.append(size)
-        if fallback:
-            anyFallback = True
-            reasons.append(f"{pos}: {reason}")
+    # Parse Excel custom sizes (may be list for multiple positions)
+    excelSizes = []
+    if useExcelLogoSize and customLogoSize:
+        parsed = parseCustomSize(customLogoSize)
+        if parsed is not None:
+            if isinstance(parsed, list):
+                # Multiple comma-separated sizes from Excel
+                excelSizes = parsed
+            else:
+                # Single size from Excel - will be used for first position only if multiple positions
+                # Or for all positions if only one position
+                if len(positions) == 1:
+                    excelSizes = [parsed]
+                else:
+                    # Single Excel value with multiple positions: use it for all
+                    excelSizes = [parsed] * len(positions)
+    
+    # Resolve size for each position
+    for idx, pos in enumerate(positions):
+        # Check if we have an Excel size for this position index
+        if idx < len(excelSizes):
+            excelSize = excelSizes[idx]
+            # Extract width if tuple (width, height)
+            if isinstance(excelSize, tuple):
+                sizes.append(excelSize[0])
+            else:
+                sizes.append(excelSize)
+        else:
+            # No Excel size for this position - use config default
+            size, fallback, reason = _resolveLogoSize(pos, "", False, logoSizesConfig)
+            sizes.append(size)
+            if fallback:
+                anyFallback = True
+                reasons.append(f"{pos}: {reason}")
+            elif not excelSizes:
+                # All positions using config defaults (no Excel sizes at all)
+                pass
+            else:
+                # Some positions had Excel sizes, this one didn't
+                reasons.append(f"{pos}: using config default (no Excel size at index {idx})")
     
     return (sizes, anyFallback, "; ".join(reasons) if reasons else "")
 
@@ -203,7 +243,12 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
                 warningMessages.append(f"Position '{locationName}' may not be fully recognized")
         
         # ========== Step 4: Detect Garment Type ==========
-        garmentType = detectGarmentTypeFromLocation(locationName, partId)
+        # Use parsed positions for accurate garment type detection
+        # This avoids false positives from Part ID heuristics (e.g., 'CT' for Carhartt)
+        if CONFIG_AVAILABLE and getGarmentTypeForPositions:
+            garmentType = getGarmentTypeForPositions(positions, partId)
+        else:
+            garmentType = detectGarmentTypeFromLocation(locationName, partId)
         enrichedRow[EnrichedColumns.GARMENT_TYPE] = garmentType
         
         # ========== Step 5: Determine Canvas Height ==========
