@@ -55,7 +55,8 @@ def getPsdSizeFromName(name):
 from configuration.configLoader import (
     getCanonicalName, 
     getGarmentType, 
-    isComboPosition
+    isComboPosition,
+    PositionNotFoundError
 )
 
 def normalizeLocation(locationName):
@@ -70,6 +71,9 @@ def detectGarmentTypeFromLocation(locationName, partId=None):
     """
     Returns category: T-SHIRT (includes Dual), CAP, BAG, BLANKET.
     Uses centralized configuration registry.
+    
+    Raises:
+        PositionNotFoundError: If position is not found in positionRegistry.yaml
     """
     return getGarmentType(locationName, partId)
 

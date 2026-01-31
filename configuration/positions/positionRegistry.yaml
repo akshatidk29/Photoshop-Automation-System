@@ -1,0 +1,243 @@
+# Position Registry
+
+# Master configuration for all artwork placement positions
+
+# This file defines:
+#   1. All valid position names
+#   2. Aliases/Variations mapping to position names
+#   3. Garment Type (T-SHIRT, CAP, BAG, BLANKET)
+#   4. Behavior flags for detectors (rotation, reference axis)
+
+# SCHEMA:
+#   POSITION-NAME:
+#     type: [T-SHIRT, CAP, BAG, BLANKET]
+#     view: [front, back, side]           # Optional, defaults to 'front'
+#     aliases: [LIST OF VARIATIONS]
+#     behavior:
+#       rotation: [standard, vertical_lock, fixed_0, fixed_90, fixed_45]
+#       reference: [vertical, horizontal, diagonal]
+#       mirror: [true, false]
+
+
+positions:
+
+  # GARMENT POSITIONS
+
+  FULL-FRONT:
+    type: T-SHIRT
+    aliases: ["FRONT", "CENTER-FRONT", "CHEST-CENTER", "FULL FRONT", "FF"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  FULL-BACK:
+    type: T-SHIRT
+    view: back
+    aliases: ["BACK", "CENTER-BACK", "FULL BACK", "FB"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  LEFT-CHEST:
+    type: T-SHIRT
+    aliases: ["L-CHEST", "CHEST-LEFT", "LC", "LFT-CHEST", "LFT CHEST", "LEFT CHEST"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  RIGHT-CHEST:
+    type: T-SHIRT
+    aliases: ["R-CHEST", "CHEST-RIGHT", "RC", "RGT-CHEST", "RGT CHEST", "RIGHT CHEST"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  LEFT-BICEP:
+    type: T-SHIRT
+    aliases: ["L-BICEP", "BICEP-LEFT", "LB", "LEFT BICEP", "LFT-BICEP", "LFT BICEP"]
+    behavior:
+      rotation: vertical_lock
+      reference: vertical
+
+  RIGHT-BICEP:
+    type: T-SHIRT
+    aliases: ["R-BICEP", "BICEP-RIGHT", "RB", "RIGHT BICEP", "RGT-BICEP", "RGT BICEP"]
+    behavior:
+      rotation: vertical_lock
+      reference: vertical
+
+  LEFT-SLEEVE:
+    type: T-SHIRT
+    aliases: ["L-SLEEVE", "SLEEVE-LEFT", "LS", "LEFT SLEEVE", "LFT-SLEEVE", "LFT SLEEVE"]
+    behavior:
+      rotation: vertical_lock
+      reference: vertical
+
+  RIGHT-SLEEVE:
+    type: T-SHIRT
+    aliases: ["R-SLEEVE", "SLEEVE-RIGHT", "RS", "RIGHT SLEEVE", "RGT-SLEEVE", "RGT SLEEVE"]
+    behavior:
+      rotation: vertical_lock
+      reference: vertical
+
+  LEFT-COLLAR:
+    type: T-SHIRT
+    aliases: ["L-COLLAR", "COLLAR-LEFT", "LFT-COLLAR"]
+    behavior:
+      rotation: standard
+      reference: horizontal
+
+  RIGHT-COLLAR:
+    type: T-SHIRT
+    aliases: ["R-COLLAR", "COLLAR-RIGHT", "RGT-COLLAR"]
+    behavior:
+      rotation: standard
+      reference: horizontal
+
+  LEFT-CUFF:
+    type: T-SHIRT
+    aliases: ["L-CUFF", "CUFF-LEFT", "LFT-CUFF"]
+    behavior:
+      rotation: standard
+      reference: horizontal
+
+  RIGHT-CUFF:
+    type: T-SHIRT
+    aliases: ["R-CUFF", "CUFF-RIGHT", "RGT-CUFF"]
+    behavior:
+      rotation: standard
+      reference: horizontal
+
+  LEFT-HIP:
+    type: T-SHIRT
+    aliases: ["L-HIP", "HIP-LEFT", "LFT-HIP"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  RIGHT-HIP:
+    type: T-SHIRT
+    aliases: ["R-HIP", "HIP-RIGHT", "RGT-HIP"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  BACK-YOKE:
+    type: T-SHIRT
+    view: back
+    aliases: ["YOKE", "BACK-NECK", "NECK-BACK", "NAP"]
+    behavior:
+      rotation: standard
+      reference: horizontal
+      
+  ON-POCKET:
+    type: T-SHIRT
+    aliases: ["POCKET", "CHEST-POCKET"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  LEFT-THIGH-HIGH:
+    type: T-SHIRT
+    aliases: ["L-THIGH", "THIGH-LEFT"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  RIGHT-THIGH-HIGH:
+    type: T-SHIRT
+    aliases: ["R-THIGH", "THIGH-RIGHT"]
+    behavior:
+      rotation: standard
+      reference: vertical
+
+  # CAP POSITIONS
+
+  FRONT-CROWN:
+    type: CAP
+    aliases: ["CAP-FRONT", "CAP-FRONT-CROWN", "HAT-FRONT"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  CAP-BACK:
+    type: CAP
+    view: back
+    aliases: ["HAT-BACK", "BACK-OF-CAP"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  CAP-SIDE:
+    type: CAP
+    view: side
+    aliases: ["HAT-SIDE"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  CAP-FRONT-SIDE:
+    type: CAP
+    aliases: ["HAT-FRONT-SIDE"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  LOWER-LEFT-CROWN:
+    type: CAP
+    aliases: ["LLC", "CAP-LLC"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  LOWER-RIGHT-CROWN:
+    type: CAP
+    aliases: ["LRC", "CAP-LRC"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  # BAG POSITIONS
+
+  "FRONT (ON BAG)":
+    type: BAG
+    obbClass: FRONT
+    aliases: ["BAG-FRONT", "BAG-FRONT-SIDE", "FRONT-ON-BAG", "FRONT-BAG", "FRONT-OF-BAG"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  "ON POCKET (ON BAG)":
+    type: BAG
+    obbClass: ON_POCKET
+    aliases: ["BAG-POCKET", "POCKET-ON-BAG", "ON-POCKET-ON-BAG", "ON-POCKET-BAG", "BAG-ON-POCKET","ON-BAG-POCKET"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  # TOWEL
+
+  CORNER-ANGLED-TOWEL:
+    type: BLANKET
+    aliases: ["CORNER-TOWEL", "TOWEL-CORNER", "ANGLED-TOWEL", "TOWEL-ANGLED"]
+    behavior:
+      rotation: fixed_45
+      reference: diagonal
+
+  FRONT_NAPKIN:
+    type: BLANKET
+    aliases: ["FRONT-NAPKIN", "NAPKIN-FRONT", "NAPKIN"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+  FRONT_CENTER:
+    type: BLANKET
+    aliases: ["FRONT-CENTER", "CENTER-FRONT", "CENTER"]
+    behavior:
+      rotation: fixed_0
+      reference: horizontal
+
+
+
+comboMappings: {}

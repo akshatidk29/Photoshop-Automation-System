@@ -16,11 +16,19 @@ from detectors.comboParser import parseComboPosition
 
 # Try to import config functions
 try:
-    from configuration.configLoader import getLogoSizeForPosition, getAllLogoSizes, getGarmentTypeForPositions
+    from configuration.configLoader import (
+        getLogoSizeForPosition, 
+        getAllLogoSizes, 
+        getGarmentTypeForPositions,
+        PositionNotFoundError,
+        validatePosition
+    )
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
     getGarmentTypeForPositions = None
+    PositionNotFoundError = Exception  # Fallback
+    validatePosition = None
 
 
 class EnrichedColumns:
@@ -237,19 +245,28 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
         enrichedRow[EnrichedColumns.POSITION] = normalizedPosition
         enrichedRow[EnrichedColumns.POSITIONS_LIST] = positions
         
-        if not positions or positions == [locationName.upper().replace(" ", "-")]:
-            # Position wasn't recognized, could be a warning
+        # Validate each position exists in registry
+        if CONFIG_AVAILABLE and validatePosition:
+            for pos in positions:
+                isValid, canonical = validatePosition(pos)
+                if not isValid:
+                    errorMessages.append(f"Position '{pos}' not found in positionRegistry.yaml")
+        elif not positions:
             if locationName.strip():
-                warningMessages.append(f"Position '{locationName}' may not be fully recognized")
+                errorMessages.append(f"Could not parse position '{locationName}'")
         
         # ========== Step 4: Detect Garment Type ==========
         # Use parsed positions for accurate garment type detection
-        # This avoids false positives from Part ID heuristics (e.g., 'CT' for Carhartt)
-        if CONFIG_AVAILABLE and getGarmentTypeForPositions:
-            garmentType = getGarmentTypeForPositions(positions, partId)
-        else:
-            garmentType = detectGarmentTypeFromLocation(locationName, partId)
-        enrichedRow[EnrichedColumns.GARMENT_TYPE] = garmentType
+        # Raises PositionNotFoundError if position not in registry
+        try:
+            if CONFIG_AVAILABLE and getGarmentTypeForPositions:
+                garmentType = getGarmentTypeForPositions(positions, partId)
+            else:
+                garmentType = detectGarmentTypeFromLocation(locationName, partId)
+            enrichedRow[EnrichedColumns.GARMENT_TYPE] = garmentType
+        except PositionNotFoundError as e:
+            errorMessages.append(str(e))
+            enrichedRow[EnrichedColumns.GARMENT_TYPE] = "UNKNOWN"
         
         # ========== Step 5: Determine Canvas Height ==========
         # Always use the canvas height selected in the GUI

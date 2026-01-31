@@ -62,7 +62,7 @@ def clearConfigCache():
 
 def getPositionRegistry():
     """Get the master position registry configuration."""
-    return _loadYaml('positionRegistry.yaml')
+    return _loadYaml('positions/positionRegistry.yaml')
 
 
 def getCanonicalName(positionName):
@@ -165,48 +165,35 @@ def getObbClassName(positionName):
     return obbClass
 
 
+class PositionNotFoundError(Exception):
+    """Raised when a position is not found in the registry."""
+    pass
+
+
 def getGarmentType(positionName, partId=None):
     """
     Determine garment type (T-SHIRT, CAP, BAG, BLANKET) from position.
     
     Args:
         positionName: Position name
-        partId: Optional part ID for fallback heuristics
+        partId: Optional part ID (not used, kept for backwards compatibility)
         
     Returns:
         Garment Type string
+        
+    Raises:
+        PositionNotFoundError: If position is not found in positionRegistry.yaml
     """
-    # 1. Try Registry Lookup
+    # Try Registry Lookup
     data = getPositionData(positionName)
     if data and 'type' in data:
         return data['type']
-        
-    # 2. Fallback Heuristics (for completely unknown positions)
-    posNorm = str(positionName).upper()
-    partIdNorm = str(partId).upper() if partId else ""
     
-    # Load detection rules from garmentTypes.yaml
-    garmentTypesConfig = _loadYaml('garmentTypes.yaml')
-    rules = garmentTypesConfig.get('detectionRules', {})
-    
-    # Check each garment type's rules (except T-SHIRT which is default)
-    for gType in ['BAG', 'CAP', 'BLANKET']:
-        typeRules = rules.get(gType, {})
-        keywords = typeRules.get('keywords', [])
-        prefixes = typeRules.get('prefixes', [])
-        
-        # Check keywords in position name
-        for keyword in keywords:
-            if keyword.upper() in posNorm:
-                return gType
-        
-        # Check prefixes in part ID (only if partId provided)
-        if partIdNorm:
-            for prefix in prefixes:
-                if partIdNorm.startswith(prefix.upper()):
-                    return gType
-        
-    return "T-SHIRT"
+    # Position not found in registry - raise error
+    raise PositionNotFoundError(
+        f"Position '{positionName}' not found in positionRegistry.yaml. "
+        f"Please add this position to the registry or check for typos."
+    )
 
 
 def getGarmentTypeForPositions(positions, partId=None):
@@ -214,20 +201,18 @@ def getGarmentTypeForPositions(positions, partId=None):
     Determine garment type from a LIST of parsed canonical positions.
     Uses the first valid position's type from the registry.
     
-    This is more reliable than checking the raw location string because:
-    1. Positions are already parsed and canonical
-    2. Each position has a defined type in positionRegistry.yaml
-    3. Avoids false positives from Part ID heuristics
-    
     Args:
         positions: List of canonical position names (e.g., ['RIGHT-CHEST', 'LEFT-CHEST'])
-        partId: Optional part ID for fallback (only used if NO positions have types)
+        partId: Optional part ID (not used, kept for backwards compatibility)
         
     Returns:
         Garment Type string
+        
+    Raises:
+        PositionNotFoundError: If no position has a type defined in positionRegistry.yaml
     """
     if not positions:
-        return "T-SHIRT"
+        raise PositionNotFoundError("No positions provided to determine garment type.")
     
     registry = getPositionRegistry()
     positionsData = registry.get('positions', {})
@@ -239,9 +224,11 @@ def getGarmentTypeForPositions(positions, partId=None):
             if 'type' in posData:
                 return posData['type']
     
-    # If no position had a type, try the original getGarmentType with first position
-    # This handles unknown positions with Part ID fallback
-    return getGarmentType(positions[0], partId)
+    # No position had a type defined - raise error
+    raise PositionNotFoundError(
+        f"None of the positions {positions} have a 'type' defined in positionRegistry.yaml. "
+        f"Please add the 'type' field to these positions in the registry."
+    )
 
 
 def getPositionBehavior(positionName):
@@ -293,7 +280,7 @@ def validatePosition(positionName):
 
 def getColumnMapping():
     """Get the column mapping configuration."""
-    return _loadYaml('columnMapping.yaml')
+    return _loadYaml('excel/columnMapping.yaml')
 
 
 def findColumnName(dfColumns, internalName):
@@ -356,7 +343,7 @@ def normalizeRowData(row, dfColumns):
 
 def getColorAliasesConfig():
     """Get color alias configuration."""
-    return _loadYaml('colorAliases.yaml')
+    return _loadYaml('colors/colorAliases.yaml')
 
 def getColorAliases():
     """Get the dictionary of color aliases."""
@@ -421,7 +408,7 @@ def getPositionType(positionName):
 
 
 def getLogoSizesConfig():
-    return _loadYaml('logoSizes.yaml')
+    return _loadYaml('positions/logoSizes.yaml')
 
 def getDefaultLogoSize(position):
     config = getLogoSizesConfig()
@@ -449,19 +436,19 @@ def getDefaultLogoSize(position):
 # ============================================================================
 
 def getIgnoreWords():
-    return _loadYaml('filenamePatterns.yaml').get('ignoreWords', [])
+    return _loadYaml('images/filenamePatterns.yaml').get('ignoreWords', [])
 
 def getFrontIndicators():
-    return _loadYaml('filenamePatterns.yaml').get('frontIndicators', [])
+    return _loadYaml('images/filenamePatterns.yaml').get('frontIndicators', [])
 
 def getBackIndicators():
-    return _loadYaml('filenamePatterns.yaml').get('backIndicators', [])
+    return _loadYaml('images/filenamePatterns.yaml').get('backIndicators', [])
 
 def getSideIndicators():
-    return _loadYaml('filenamePatterns.yaml').get('sideIndicators', [])
+    return _loadYaml('images/filenamePatterns.yaml').get('sideIndicators', [])
 
 def getAllowedExtensions():
-    return ['.' + e.lstrip('.') for e in _loadYaml('filenamePatterns.yaml').get('allowedExtensions', ['jpg','png'])]
+    return ['.' + e.lstrip('.') for e in _loadYaml('images/filenamePatterns.yaml').get('allowedExtensions', ['jpg','png'])]
 
 
 # ============================================================================
@@ -527,14 +514,14 @@ def updateLogoSize(positionName, newSize):
             data['positions'] = {}
             
         data['positions'][canonical] = int(newSize)
-        return _saveYaml('logoSizes.yaml', data)
+        return _saveYaml('positions/logoSizes.yaml', data)
     except Exception as e:
         print(f"[Config] Failed to update logo size: {e}")
         return False
 
 def getClippingConfig():
     """Get the clipping configuration."""
-    return _loadYaml('clippingPositions.yaml')
+    return _loadYaml('positions/clippingPositions.yaml')
 
 def getAllClippingPositions():
     """Get list of positions enabled for clipping."""
@@ -570,7 +557,7 @@ def updateClippingConfig(globalEnabled=None, positions=None):
                 canonical = getCanonicalName(pos)
                 data['positions'][canonical] = bool(enabled)
                 
-        return _saveYaml('clippingPositions.yaml', data)
+        return _saveYaml('positions/clippingPositions.yaml', data)
     except Exception as e:
         print(f"[Config] Failed to update clipping config: {e}")
         return False

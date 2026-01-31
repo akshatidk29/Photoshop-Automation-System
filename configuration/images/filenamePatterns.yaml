@@ -1,0 +1,80 @@
+# Filename Pattern Configuration
+
+# This file defines patterns to match in image filenames.
+# Used for identifying image types and filtering out unwanted images.
+
+# HOW TO USE:
+# Add words to ignoreWords to skip images containing those words
+
+# Words to IGNORE when matching filenames
+# Images containing these words will be scored lower or skipped
+
+ignoreWords:
+  # View types to avoid
+  - form
+  - folded
+  
+  # Temporary/processing files
+  - temp
+  - copy
+  - backup
+  
+  # Internal codes
+  - psb
+  - ga
+  - nfs
+  - sfp
+  
+  # Interior/inside views
+  - inside
+  - interior
+  
+  # Stickers/labels
+  - sticker
+  - label
+  - tag
+
+# Indicators that an image is a FRONT view
+frontIndicators:
+  - front
+  - fullfront
+  - flatfront
+  - modelfront
+  - front1
+  - front2
+  - front3
+
+# Indicators that an image is a BACK view
+backIndicators:
+  - back
+  - fullback
+  - flatback
+  - modelback
+  - rear
+  - back1
+  - back2
+  - back3
+  - back4
+
+# Indicators that an image is a SIDE view
+sideIndicators:
+  - side
+  - straight
+  - hatstraight
+  - profile
+
+# File extensions to include (without the dot)
+allowedExtensions:
+  - jpg
+  - jpeg
+  - png
+
+# Priority order for selecting images when multiple match
+# Lower number = higher priority
+viewPriority:
+  front: 1
+  back: 2
+  side: 3
+  flat: 4
+  model: 5
+  folded: 6

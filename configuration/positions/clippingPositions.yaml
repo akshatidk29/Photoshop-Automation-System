@@ -1,0 +1,32 @@
+clippingEnabled: false
+defaultClipping: false
+positions:
+  BACK-YOKE: false
+  CAP-BACK: false
+  CAP-FRONT-SIDE: false
+  CAP-SIDE: false
+  CORNER-ANGLED-TOWEL: false
+  FRONT (ON BAG): true
+  FRONT-CROWN: false
+  FRONT_CENTER: false
+  FRONT_NAPKIN: false
+  FULL-BACK: false
+  FULL-FRONT: false
+  LEFT-BICEP: true
+  LEFT-CHEST: false
+  LEFT-COLLAR: true
+  LEFT-CUFF: false
+  LEFT-HIP: false
+  LEFT-SLEEVE: true
+  LEFT-THIGH-HIGH: false
+  LOWER-LEFT-CROWN: false
+  LOWER-RIGHT-CROWN: false
+  ON POCKET (ON BAG): false
+  ON-POCKET: false
+  RIGHT-BICEP: true
+  RIGHT-CHEST: false
+  RIGHT-COLLAR: true
+  RIGHT-CUFF: false
+  RIGHT-HIP: false
+  RIGHT-SLEEVE: true
+  RIGHT-THIGH-HIGH: false

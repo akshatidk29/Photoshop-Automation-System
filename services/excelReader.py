@@ -69,27 +69,8 @@ def readExcel(filePath):
     Returns list of row dictionaries with LEGACY column names for backward compatibility.
     """
     try:
-        # Create processed folder
-        baseDir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        csvFolder = os.path.join(baseDir, "assets", "processed_csvs")
-        ensureFolder(csvFolder)
-
-        # 1. Convert to CSV
-        if filePath.lower().endswith(('.xlsx', '.xls')):
-            filename = os.path.splitext(os.path.basename(filePath))[0] + ".csv"
-            csvPath = os.path.join(csvFolder, filename)
-            
-            # Read Excel
-            dfTemp = pd.read_excel(filePath)
-            # Save to CSV
-            dfTemp.to_csv(csvPath, index=False, encoding='utf-8-sig')
-            
-            print(f"[INFO] Converted Excel to CSV: {csvPath}")
-        else:
-            csvPath = filePath
-
-        # 2. Read from CSV
-        df = pd.read_csv(csvPath)
+        # 1. Read from Excel
+        df = pd.read_excel(filePath)
         dfColumns = list(df.columns)
         
     except Exception as e:
