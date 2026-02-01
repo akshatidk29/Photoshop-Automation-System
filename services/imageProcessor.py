@@ -1,28 +1,17 @@
-"""
-Image Processor Service
-Handles image pre-processing including background removal, resizing, and positioning
-to standard canvas sizes (1200x1800 or 1200x1200).
-"""
-
 import os
 import cv2
 import numpy as np
 from PIL import Image
 from rembg import remove
 import shutil
-import tempfile
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 class ImageProcessor:
-    """Service for processing images before detection and placement."""
     
     def __init__(self, tempDir: str = "processedImg"):
         """
         Initialize the image processor.
-        
-        Args:
-            tempDir: Directory to store temporary processed images
         """
         self.tempDir = os.path.abspath(tempDir)
         if not os.path.exists(self.tempDir):
@@ -41,12 +30,6 @@ class ImageProcessor:
     def _extractForeground(self, imageArray: np.ndarray) -> Image.Image:
         """
         Extract the foreground object with transparent background using rembg.
-        
-        Args:
-            imageArray: numpy array of the image (BGR format)
-        
-        Returns:
-            PIL Image with RGBA (transparent background)
         """
         pilImage = Image.fromarray(cv2.cvtColor(imageArray, cv2.COLOR_BGR2RGB))
         removedBg = remove(pilImage)
@@ -55,9 +38,6 @@ class ImageProcessor:
     def _detectObjectBounds(self, alphaChannel: np.ndarray) -> Tuple[int, int, int, int]:
         """
         Detect bounding box from alpha channel.
-        
-        Returns:
-            (top, bottom, left, right)
         """
         rows = np.any(alphaChannel > 10, axis=1)
         cols = np.any(alphaChannel > 10, axis=0)
@@ -75,13 +55,6 @@ class ImageProcessor:
     def processImage(self, inputPath: str, targetHeight: int = 1800) -> str:
         """
         Process an image: remove background, resize, and center on canvas.
-        
-        Args:
-            inputPath: Path to source image
-            targetHeight: Target canvas height (1800 or 1200)
-            
-        Returns:
-            Path to the processed image file
         """
         # Determine mode logic
         if targetHeight == 1800:

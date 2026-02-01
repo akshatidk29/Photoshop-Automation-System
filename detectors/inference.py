@@ -1,11 +1,3 @@
-"""
-Generic Inference Engine for YOLO OBB Models.
-
-Handles model loading and inference for OBB detection.
-Supports both PyTorch (.pt) and ONNX (.onnx) formats.
-Automatically uses ONNX if available for faster CPU inference.
-"""
-
 import os
 
 # Disable ultralytics auto-update (prevents GPU package installation)
@@ -81,13 +73,6 @@ class InferenceEngine:
     def detect(self, imagePath: str, confThreshold: float = 0.01) -> List[OBBRegion]:
         """
         Run detection on an image.
-        
-        Args:
-            imagePath: Path to the input image.
-            confThreshold: Confidence threshold (default 0.01).
-            
-        Returns:
-            List of OBBRegion objects (best detection per class).
         """
         if self.model is None:
             return []

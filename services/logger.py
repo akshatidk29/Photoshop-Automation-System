@@ -1,8 +1,3 @@
-"""
-Logger module for Photoshop Automation.
-Provides user-friendly console logging.
-"""
-
 from core.utils import cleanFilename
 
 
@@ -12,15 +7,10 @@ def logError(message):
 
 
 class RowLogger:
-    """
-    Logger dedicated to a single row processing.
-    Provides clear, user-friendly messages for each step.
-    """
     
     def __init__(self, index, name):
         self.index = index
         self.name = cleanFilename(name)
-        # No longer creating individual log files per row
             
     def log(self, message):
         """Log info message."""
@@ -32,10 +22,7 @@ class RowLogger:
         print(f"    ► {stepName}" + (f": {details}" if details else ""))
 
     def error(self, message, reason=""):
-        """
-        Log error message with optional reason.
-        This will be shown to user in console.
-        """
+
         if reason:
             fullMessage = f"{message} — Reason: {reason}"
         else:

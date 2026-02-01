@@ -1,14 +1,8 @@
 """
 Model Conversion Script - Export YOLO models to ONNX format.
-
-Run this script ONCE to convert all .pt models to ONNX format.
-This will significantly speed up inference on CPU.
-
-Usage:
-    python detectors/convert_to_onnx.py
+Usage: python detectors/convert_to_onnx.py
 """
 
-import os
 from pathlib import Path
 
 def convert_models():

@@ -1,11 +1,5 @@
-"""
-Cap Detector using YOLO OBB Model with Heuristic Fallback.
-Provides coordinates, rotation, and logo scale for cap regions.
-"""
-
 import os
 import cv2
-import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
@@ -147,14 +141,8 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Uses behavior flags from registry.
     """
-    behavior = getPositionBehavior(locationName)
-    rotationMode = behavior.get('rotation', 'standard')
-    
-    if rotationMode == 'fixed_0':
-        return 0.0
-    
+    # 1. FIRST: Try OBB model detection (most accurate)
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
@@ -165,4 +153,14 @@ def getRotation(imagePath, locationName):
     except Exception:
         pass
     
+    # 2. SECOND: Fall back to behavior flags
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    if rotationMode == 'fixed_45':
+        return -45.0
+    
+    # 3. Default
     return 0.0

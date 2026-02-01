@@ -1,8 +1,3 @@
-"""
-Bag Detector using YOLO OBB Model with Heuristic Fallback.
-Provides coordinates for bag regions using either OBB or intelligent segmentation.
-"""
-
 import os
 import cv2
 import numpy as np
@@ -180,20 +175,24 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Uses behavior flags from registry.
     """
-    behavior = getPositionBehavior(locationName)
-    rotationMode = behavior.get('rotation', 'standard')
-    
-    if rotationMode == 'fixed_0':
-        return 0.0
-    
+    # 1. FIRST: Try OBB model detection (most accurate)
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         if targetClass in regions:
             return -regions[targetClass].angle
-    except: 
+    except:
         pass
     
+    # 2. SECOND: Fall back to behavior flags
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0':
+        return 0.0
+    if rotationMode == 'fixed_45':
+        return -45.0
+    
+    # 3. Default
     return 0.0

@@ -1,13 +1,13 @@
-from pdf2image import convert_from_path
-import win32com.client
 import os
+import win32com.client
+
+from pdf2image import convert_from_path
+
+import cv2
+import tempfile
+import numpy as np
 
 from services.logger import logError
-import cv2
-import numpy as np
-import tempfile
-from core.utils import parseCustomSize
-from PIL import Image
 
 
 # Global Photoshop app instance for faster COM calls

@@ -1,10 +1,3 @@
-"""
-Batch Logger Service
-Comprehensive logging for entire batch processing with categories:
-ERROR, FALLBACK, WARNING, SUCCESS.
-Writes to log file in real-time and generates summary report.
-"""
-
 import os
 import datetime
 from typing import Dict, List, Any, Optional
@@ -22,22 +15,10 @@ class LogCategory:
 class BatchLogger:
     """
     Comprehensive batch logger for tracking entire Excel processing.
-    
-    Features:
-    - Real-time log file writing
-    - Categorized entries (ERROR, FALLBACK, WARNING, SUCCESS)
-    - Summary report generation
-    - Statistics tracking
     """
     
     def __init__(self, batchName: str, outputDir: str):
-        """
-        Initialize batch logger.
-        
-        Args:
-            batchName: Name of the batch (usually Excel filename)
-            outputDir: Directory to save log files
-        """
+
         self.batchName = batchName
         self.startTime = datetime.datetime.now()
         
@@ -73,7 +54,7 @@ class BatchLogger:
             f.write("=" * 80 + "\n\n")
     
     def _writeEntry(self, entry: Dict[str, Any]):
-        """Write an entry to the log file immediately."""
+
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         category = entry['category']
         rowIndex = entry['rowIndex']
@@ -98,16 +79,7 @@ class BatchLogger:
     
     def log(self, category: str, rowIndex: int, finalName: str, 
             message: str, details: Optional[str] = None):
-        """
-        Log an entry with category, row info, and message.
-        
-        Args:
-            category: LogCategory constant (ERROR, FALLBACK, WARNING, SUCCESS)
-            rowIndex: Row number in Excel
-            finalName: Final image name for this row
-            message: Log message
-            details: Optional additional details
-        """
+
         entry = {
             'timestamp': datetime.datetime.now(),
             'category': category,
@@ -132,12 +104,6 @@ class BatchLogger:
                  reason: Optional[str] = None):
         """
         Log an error for a specific row.
-        
-        Args:
-            rowIndex: Row number in Excel
-            finalName: Final image name
-            message: Error message
-            reason: Optional reason for the error
         """
         fullMessage = message
         if reason:
@@ -148,12 +114,6 @@ class BatchLogger:
                     fallbackUsed: str):
         """
         Log when a fallback option was used.
-        
-        Args:
-            rowIndex: Row number in Excel
-            finalName: Final image name
-            message: What failed (e.g., "Model did not predict position")
-            fallbackUsed: What fallback was used (e.g., "Used MediaPipe coordinates")
         """
         self.log(LogCategory.FALLBACK, rowIndex, finalName, 
                  f"{message} → Using: {fallbackUsed}")
@@ -161,31 +121,18 @@ class BatchLogger:
     def logWarning(self, rowIndex: int, finalName: str, message: str):
         """
         Log a warning for a specific row.
-        
-        Args:
-            rowIndex: Row number in Excel
-            finalName: Final image name
-            message: Warning message
         """
         self.log(LogCategory.WARNING, rowIndex, finalName, message)
     
     def logSuccess(self, rowIndex: int, finalName: str, message: str = "Processed successfully"):
         """
         Log successful processing.
-        
-        Args:
-            rowIndex: Row number in Excel
-            finalName: Final image name
-            message: Success message
         """
         self.log(LogCategory.SUCCESS, rowIndex, finalName, message)
     
     def getStats(self) -> Dict[str, int]:
         """
         Get statistics for the batch.
-        
-        Returns:
-            Dict with counts for each category and total
         """
         return dict(self.stats)
     
@@ -196,9 +143,6 @@ class BatchLogger:
     def saveReport(self) -> str:
         """
         Generate and save summary report.
-        
-        Returns:
-            Path to the saved report
         """
         endTime = datetime.datetime.now()
         duration = endTime - self.startTime

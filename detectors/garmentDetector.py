@@ -1,13 +1,5 @@
-"""
-Garment Detector using YOLO OBB Model with MediaPipe Pose Fallback.
-Provides coordinates, rotation, and logo scale for garment regions.
-
-When OBB model fails, uses MediaPipe Pose landmarks for accurate placement.
-"""
-
 import os
 import cv2
-import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from configuration.configLoader import (
@@ -51,8 +43,6 @@ def _getRegions(imagePath):
         
     return _detectionCache[key]
 
-# Location Mapping: Excel Name -> OBB Class Name
-# Now handled via getObbClassName from configLoader
 def _getObbClassName(locationName):
     """Get OBB class name for garments from location (uses config)."""
     return getObbClassName(locationName)
@@ -79,10 +69,7 @@ def _getMediaPipePose():
     return _mediapipePose
 
 def _getPoseLandmarks(imagePath):
-    """
-    Get pose landmarks from image using MediaPipe.
-    Returns dict of landmark names to (x, y) pixel coordinates.
-    """
+    """Get pose landmarks from image using MediaPipe. Returns dict of {name: (x, y)}."""
     pose = _getMediaPipePose()
     if pose is None:
         return None
@@ -137,17 +124,7 @@ def _getPoseLandmarks(imagePath):
         return None
 
 def _getCoordinatesFromLandmarks(landmarks, locationName, imgW, imgH):
-    """
-    Calculate logo placement coordinates from pose landmarks.
-    
-    Args:
-        landmarks: Dict of pose landmarks {name: (x, y)}
-        locationName: Target position name
-        imgW, imgH: Image dimensions
-        
-    Returns:
-        (x, y) tuple for logo placement
-    """
+    """Calculate logo placement coordinates from pose landmarks."""
     obbClass = _getObbClassName(locationName)
     
     # Get key landmarks
@@ -307,8 +284,6 @@ def _getCoordinatesFromLandmarks(landmarks, locationName, imgW, imgH):
         return (x, y)
     
     if obbClass == "LEFT_THIGH_HIGH":
-        # Wearer's LEFT thigh = VIEWER'S RIGHT = right side of image center
-        # For pants images, use a reliable position on the left leg
         if lHip:
             # Move towards image center (left leg is on right side for viewer)
             x = lHip[0] + int(shoulderWidth * 0.15)  # Offset inward toward leg center
@@ -319,8 +294,6 @@ def _getCoordinatesFromLandmarks(landmarks, locationName, imgW, imgH):
         return (int(imgW * 0.55), int(imgH * 0.45))
     
     if obbClass == "RIGHT_THIGH_HIGH":
-        # Wearer's RIGHT thigh = VIEWER'S LEFT = left side of image center
-        # For pants images, use a reliable position on the right leg
         if rHip:
             # Move towards image center (right leg is on left side for viewer)
             x = rHip[0] - int(shoulderWidth * 0.15)  # Offset inward toward leg center
@@ -336,7 +309,6 @@ def _getCoordinatesFromLandmarks(landmarks, locationName, imgW, imgH):
 def _getHeuristicCoordinates(imagePath, locationName):
     """
     Fallback using MediaPipe Pose landmarks.
-    Returns (x, y) tuple.
     """
     img = cv2.imread(imagePath)
     if img is None:
@@ -414,31 +386,28 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Uses behavior flags from registry:
-      - standard: Use OBB angle
-      - vertical_lock: Force 0 (vertical)
-      - fixed_0: Force 0
-      - fixed_45: Force 45 (for towels)
     """
-    behavior = getPositionBehavior(locationName)
-    rotationMode = behavior.get('rotation', 'standard')
-    
-    if rotationMode == 'fixed_0':
-        return 0.0
-    if rotationMode == 'fixed_90':
-        return 90.0
-    if rotationMode == 'vertical_lock':
-        return 0.0
-        
+    # 1. FIRST: Try OBB model detection (most accurate)
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         
         if targetClass in regions:
-            angle = -regions[targetClass].angle
-            return angle
+            return -regions[targetClass].angle
             
     except Exception:
         pass
     
+    # 2. SECOND: Fall back to behavior flags
+    behavior = getPositionBehavior(locationName)
+    rotationMode = behavior.get('rotation', 'standard')
+    
+    if rotationMode == 'fixed_0' or rotationMode == 'vertical_lock':
+        return 0.0
+    if rotationMode == 'fixed_90':
+        return 90.0
+    if rotationMode == 'fixed_45':
+        return -45.0
+    
+    # 3. Default
     return 0.0

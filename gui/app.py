@@ -1,8 +1,4 @@
-"""
-Photoshop Automation - GUI Module
-Beautiful, modern GUI using CustomTkinter for production-ready automation.
-COMPACT SINGLE-PAGE LAYOUT - Optimized spacing
-"""
+"""Photoshop Automation - Modern GUI using CustomTkinter."""
 
 import os
 import customtkinter as ctk

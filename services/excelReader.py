@@ -1,12 +1,8 @@
-"""
-Excel Reader Module
-Reads Excel files with flexible column name mapping from YAML configuration.
-"""
+"""Excel Reader - Reads Excel files with flexible column name mapping."""
 
 import re
 import pandas as pd
 from core.config import MANDATORY_COLUMNS
-from core.utils import ensureFolder
 from .logger import logError
 
 
@@ -61,12 +57,7 @@ def _findColumn(dfColumns, internalName):
 
 
 def readExcel(filePath):
-    """
-    Read Excel file by first converting to CSV to ensure stability.
-    Uses YAML configuration for flexible column name mapping.
-    
-    Returns list of row dictionaries with LEGACY column names for backward compatibility.
-    """
+    """Read Excel file. Returns list of row dictionaries with LEGACY column names."""
     try:
         # 1. Read from Excel
         df = pd.read_excel(filePath)

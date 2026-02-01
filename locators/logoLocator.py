@@ -1,8 +1,4 @@
-"""
-Logo Locator Module
-Finds logo files by decoration code with robust matching.
-Supports multiple formats and handles various naming conventions.
-"""
+"""Logo Locator - Finds logo files by decoration code with robust matching."""
 
 import os
 import re
@@ -20,22 +16,7 @@ def normalize(text: str) -> str:
 
 
 def findLogo(logoRoot, decorationCode):
-    """
-    Find logo file by decoration code with robust matching.
-    
-    Searches for logo files matching the decoration code with various strategies:
-    1. Direct file lookup (exact name)
-    2. Subfolder with same name as code
-    3. Case-insensitive search
-    4. Partial/fuzzy matching
-    
-    Args:
-        logoRoot: Root directory to search for logos
-        decorationCode: The decoration/logo code to find
-        
-    Returns:
-        Full path to logo file, or None if not found
-    """
+    """Find logo file by decoration code using multiple matching strategies."""
     if not decorationCode:
         return None
     

@@ -1,24 +1,17 @@
-"""
-Excel Pre-Processor Service
-Pre-processes entire Excel upfront to generate enriched data with resolved paths.
-Enables upfront error detection and deterministic processing.
-"""
-
 import os
 import pandas as pd
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 from services.excelReader import readExcel
 from locators.imageLocator import findImageCandidates
 from locators.logoLocator import findLogo
-from core.utils import detectGarmentTypeFromLocation, parseCustomSize, normalizeLocation
+from core.utils import detectGarmentTypeFromLocation, parseCustomSize
 from detectors.comboParser import parseComboPosition
 
 # Try to import config functions
 try:
     from configuration.configLoader import (
         getLogoSizeForPosition, 
-        getAllLogoSizes, 
         getGarmentTypeForPositions,
         PositionNotFoundError,
         validatePosition
@@ -99,9 +92,11 @@ def _resolveLogoSizesForPositions(positions: List[str], customLogoSize: str,
     Resolve logo sizes for multiple positions.
     
     Supports:
-    - Single Excel size applied to all positions: "120" or "120x180"
-    - Comma-separated sizes for each position: "99,120" or "99x150,120x180"
+    - Comma-separated sizes mapped to positions in order: "80x60, 100" with 3 positions
+      → 1st position gets 80, 2nd gets 100, 3rd gets config default
+    - Single Excel size with single position: "120" → position gets 120
     - If fewer Excel sizes than positions, remaining positions use config defaults
+    - If no Excel sizes, all positions use config defaults
     
     Returns:
         tuple: (sizes_list, any_fallback_used, fallback_reasons)
@@ -116,16 +111,12 @@ def _resolveLogoSizesForPositions(positions: List[str], customLogoSize: str,
         parsed = parseCustomSize(customLogoSize)
         if parsed is not None:
             if isinstance(parsed, list):
-                # Multiple comma-separated sizes from Excel
+                # Multiple comma-separated sizes from Excel - map to positions in order
                 excelSizes = parsed
             else:
-                # Single size from Excel - will be used for first position only if multiple positions
-                # Or for all positions if only one position
-                if len(positions) == 1:
-                    excelSizes = [parsed]
-                else:
-                    # Single Excel value with multiple positions: use it for all
-                    excelSizes = [parsed] * len(positions)
+                # Single size from Excel - use only for first position
+                # Remaining positions will use config defaults
+                excelSizes = [parsed]
     
     # Resolve size for each position
     for idx, pos in enumerate(positions):
@@ -144,12 +135,9 @@ def _resolveLogoSizesForPositions(positions: List[str], customLogoSize: str,
             if fallback:
                 anyFallback = True
                 reasons.append(f"{pos}: {reason}")
-            elif not excelSizes:
-                # All positions using config defaults (no Excel sizes at all)
+            elif excelSizes:
+                # Some positions had Excel sizes, this one didn't - not an error, just info
                 pass
-            else:
-                # Some positions had Excel sizes, this one didn't
-                reasons.append(f"{pos}: using config default (no Excel size at index {idx})")
     
     return (sizes, anyFallback, "; ".join(reasons) if reasons else "")
 
@@ -167,13 +155,6 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
             - canvasHeight: Default canvas height (1800 or 1200)
             - logoSizes: Dict of position -> size from GUI config
             - useExcelLogoSize: Whether to prioritize Excel logo size
-    
-    Returns:
-        Dict containing:
-            - enrichedRows: List of row dicts with __AUTO_ columns added
-            - stats: {total, valid, errors, warnings}
-            - errors: List of error details
-            - warnings: List of warning details
     """
     print("\n" + "=" * 60)
     print("         EXCEL PRE-PROCESSING")
@@ -339,16 +320,7 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
 
 
 def saveEnrichedCsv(enrichedRows: List[Dict], outputPath: str) -> bool:
-    """
-    Save enriched rows to CSV for debugging/inspection.
-    
-    Args:
-        enrichedRows: List of enriched row dictionaries
-        outputPath: Path to save CSV
-    
-    Returns:
-        True if saved successfully
-    """
+
     try:
         df = pd.DataFrame(enrichedRows)
         df.to_csv(outputPath, index=False, encoding='utf-8-sig')

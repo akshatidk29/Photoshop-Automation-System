@@ -1,7 +1,4 @@
-"""
-Configuration Loader Module
-Loads and manages YAML configuration files for the automation system.
-"""
+"""Loads and manages YAML configuration files."""
 
 import yaml
 from pathlib import Path
@@ -56,71 +53,58 @@ def getPositionRegistry():
 
 
 def getCanonicalName(positionName):
-    """
-    Resolve any alias or variation to the canonical position name.
-    
-    Args:
-        positionName: Any position string (e.g., "BAG-FRONT", "Front", "LC")
-        
-    Returns:
-        Canonical name (e.g., "FRONT (ON BAG)", "FULL-FRONT", "LEFT-CHEST")
-        Returns the input sanitized if no match found.
-    """
+    """Resolve any alias/variation to canonical position name."""
     if not positionName:
         return ""
         
     registry = getPositionRegistry()
     positions = registry.get('positions', {})
     
-    # Normalize input: UPPERCASE, replace spaces with hyphens, remove extra hyphens
+    # Normalize input
     cleanInput = str(positionName).strip().upper().replace(" ", "-").replace("&", "-")
     cleanInput = "-".join(filter(None, cleanInput.split("-")))
     
-    # 1. Check if it IS a canonical name (Exact Match)
+    # Check if it IS a canonical name
     if cleanInput in positions:
         return cleanInput
         
-    # 1b. Check against normalized keys (Handle spaces/parens in keys)
-    # This handles "FRONT (ON BAG)" (key) vs "FRONT-(ON-BAG)" (input)
+    # Check against normalized keys (Handle spaces/parens in keys)
     for key in positions:
         normKey = str(key).strip().upper().replace(" ", "-").replace("&", "-")
         normKey = "-".join(filter(None, normKey.split("-")))
         if normKey == cleanInput:
             return key
         
-    # 2. Check aliases
-    # We build a reverse lookup map on the fly (or ideally cached)
-    # For now, iterate (registry is small)
+    # Check aliases
     for canonical, data in positions.items():
         aliases = data.get('aliases', [])
-        # Check direct alias match
+
         for alias in aliases:
-            # Normalize alias too just in case
+ 
             aliasNorm = str(alias).strip().upper().replace(" ", "-").replace("&", "-")
             aliasNorm = "-".join(filter(None, aliasNorm.split("-")))
             if aliasNorm == cleanInput:
                 return canonical
                 
-    # 3. Check Combo Mappings
+    # Check Combo Mappings
     combos = registry.get('comboMappings', {})
     if cleanInput in combos:
         return cleanInput
     
-    # 3b. Check normalized Combo keys
+    # Check normalized Combo keys
     for key in combos:
         normKey = str(key).strip().upper().replace(" ", "-").replace("&", "-")
         normKey = "-".join(filter(None, normKey.split("-")))
         if normKey == cleanInput:
             return key
         
-    # Return normalized input if unknown
+    # normalized input if unknown
     return cleanInput
 
 
 def getPositionData(positionName):
     """
     Get the full metadata for a position.
-    Resolves aliases first.
     """
     canonical = getCanonicalName(positionName)
     registry = getPositionRegistry()
@@ -128,19 +112,8 @@ def getPositionData(positionName):
 
 
 def getObbClassName(positionName):
-    """
-    Get the OBB model class name for a position.
-    
-    Priority:
-    1. Explicit 'obbClass' field in positionRegistry.yaml
-    2. Normalized canonical name (replace hyphens/spaces with underscores)
-    
-    Args:
-        positionName: Position name (any variation)
-        
-    Returns:
-        OBB class name string (e.g., "FRONT", "LEFT_CHEST", "ON_POCKET")
-    """
+
+    # Get the OBB model class name for a position.
     canonical = getCanonicalName(positionName)
     data = getPositionData(positionName)
     
@@ -148,8 +121,7 @@ def getObbClassName(positionName):
     if data and 'obbClass' in data:
         return data['obbClass']
     
-    # Default: normalize canonical name to model format
-    # Replace hyphens, spaces, parentheses with underscores
+    # normalize canonical name to model format
     obbClass = canonical.replace("-", "_").replace(" ", "_")
     obbClass = obbClass.replace("(", "").replace(")", "")
     return obbClass
@@ -161,25 +133,13 @@ class PositionNotFoundError(Exception):
 
 
 def getGarmentType(positionName, partId=None):
-    """
-    Determine garment type (T-SHIRT, CAP, BAG, BLANKET) from position.
-    
-    Args:
-        positionName: Position name
-        partId: Optional part ID (not used, kept for backwards compatibility)
-        
-    Returns:
-        Garment Type string
-        
-    Raises:
-        PositionNotFoundError: If position is not found in positionRegistry.yaml
-    """
-    # Try Registry Lookup
+    """Determine garment type from position. Raises PositionNotFoundError if not found."""
+
     data = getPositionData(positionName)
     if data and 'type' in data:
         return data['type']
     
-    # Position not found in registry - raise error
+    # Position not found in registry
     raise PositionNotFoundError(
         f"Position '{positionName}' not found in positionRegistry.yaml. "
         f"Please add this position to the registry or check for typos."
@@ -187,20 +147,7 @@ def getGarmentType(positionName, partId=None):
 
 
 def getGarmentTypeForPositions(positions, partId=None):
-    """
-    Determine garment type from a LIST of parsed canonical positions.
-    Uses the first valid position's type from the registry.
-    
-    Args:
-        positions: List of canonical position names (e.g., ['RIGHT-CHEST', 'LEFT-CHEST'])
-        partId: Optional part ID (not used, kept for backwards compatibility)
-        
-    Returns:
-        Garment Type string
-        
-    Raises:
-        PositionNotFoundError: If no position has a type defined in positionRegistry.yaml
-    """
+    """Determine garment type from list of positions. Uses first valid position's type."""
     if not positions:
         raise PositionNotFoundError("No positions provided to determine garment type.")
     
@@ -224,7 +171,6 @@ def getGarmentTypeForPositions(positions, partId=None):
 def getPositionBehavior(positionName):
     """
     Get behavior flags for a position.
-    
     Returns dict: { 'rotation': '...', 'reference': '...', 'mirror': bool }
     """
     data = getPositionData(positionName)
@@ -234,16 +180,15 @@ def getPositionBehavior(positionName):
 def validatePosition(positionName):
     """
     Check if a position is valid (either canonical, alias, or combo).
-    
     Returns:
         (isValid, canonicalName)
     """
-    # Resolve name
+
     canonical = getCanonicalName(positionName)
     registry = getPositionRegistry()
     
     # Check if it exists in main positions OR combo mappings
-    if canonical in registry.get('positions', {}) or canonical in registry.get('comboMappings', {}):
+    if canonical in registry.get('positions', {}):
         return True, canonical
         
     return False, canonical
@@ -299,13 +244,6 @@ def getColorAliasesConfig():
 def expandColorVariants(colorName):
     """
     Generate a set of variant strings for a color name.
-    Useful for flexible matching (e.g., "Navy" matches "nvy", "Dark Navy").
-    
-    Args:
-        colorName: The base color string (e.g. "Navy")
-        
-    Returns:
-        Set of lowercase normalized variant strings
     """
     if not colorName:
         return set()
@@ -316,20 +254,16 @@ def expandColorVariants(colorName):
     
     variants = {normalized}
     
-    # 1. Reverse lookup: If input is a short alias (e.g. "nvy"), find full names
+    # Reverse lookup
     if normalized in aliases:
         for full in aliases[normalized]:
             variants.add(full.lower())
             
-    # 2. Forward lookup: If input is a full name (e.g. "Navy"), find aliases
-    # This requires scanning the alias dict
+    # Forward lookup
     for alias, fulls in aliases.items():
         if normalized in [f.lower() for f in fulls]:
             variants.add(alias)
             
-    # 3. Handle compound parts (e.g. "darknavy" -> "dark", "navy")
-    # This helps matching split variants
-    
     return variants
 
 # Logo Size Functions
@@ -337,14 +271,12 @@ def expandColorVariants(colorName):
 def getPositionType(positionName):
     """
     Return 'front', 'back' or 'side' for a position.
-    Used by imageLocator.
     """
-    # 1. Check registry for explicit 'view' type
+
     data = getPositionData(positionName)
     if data and 'view' in data:
         return data['view']
         
-    # 3. Default to 'front'
     return 'front'
 
 
@@ -400,11 +332,6 @@ def getAllLogoSizes():
 def getLogoSizeForPosition(position, configOverride=None):
     """
     Get the specific logo size for a position.
-    
-    Args:
-        position: The position name
-        configOverride: Optional dictionary to use instead of loading from file
-                        (used by excelPreProcessor with GUI settings)
     """
     if configOverride is not None:
         # Use provided config
@@ -415,13 +342,11 @@ def getLogoSizeForPosition(position, configOverride=None):
              positions = configOverride['positions']
              defaultSize = configOverride.get('defaultSize', 99)
         else:
-             # Assume it's the flat positions dictionary itself
              positions = configOverride
              defaultSize = 99
         
         # Try canonical
         if canonical in positions:
-            # Handle string/int conversion safely
             try:
                 return int(positions[canonical])
             except:
@@ -473,10 +398,6 @@ def isClippingEnabledGlobal():
 def updateClippingConfig(globalEnabled=None, positions=None):
     """
     Update clipping configuration.
-    
-    Args:
-        globalEnabled: bool or None (if None, keeps existing)
-        positions: dict of {positionName: bool} or None
     """
     try:
         data = getClippingConfig()
@@ -495,6 +416,7 @@ def updateClippingConfig(globalEnabled=None, positions=None):
                 data['positions'][canonical] = bool(enabled)
                 
         return _saveYaml('positions/clippingPositions.yaml', data)
+    
     except Exception as e:
         print(f"[Config] Failed to update clipping config: {e}")
         return False

@@ -1,9 +1,3 @@
-"""
-Image Locator Module
-Finds product images with robust color matching and front/back selection.
-Uses YAML configuration for flexible, user-editable matching rules.
-"""
-
 import os
 import re
 import json
@@ -77,12 +71,7 @@ def getColorVariants(color: str) -> set:
 
 
 def resolvePositionType(location: str) -> str:
-    """
-    Determine if location requires front, back, dual, or side image.
-    
-    For multi-position strings like "Back Yoke Full Back", this parses
-    the positions and checks if ANY position requires a back view.
-    """
+    """Determine if location requires front, back, dual, or side image."""
     if not location:
         return "front"
     
@@ -261,8 +250,6 @@ def classifyImage(imgPath):
         - Exact token match: "back" in ["bg100", "back", "1200w"]
         - Token suffix match: "flatback" token ends with "back"
         - Token contains indicator followed by digit: "flatstraight6" contains "straight"
-        Note: endswith naturally prevents false positives like "black" matching "back"
-              because "black" ends with "ack", not "back"
         """
         for indicator in indicators:
             ind = indicator.lower()

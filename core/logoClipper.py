@@ -1,32 +1,13 @@
-"""
-Simple logo clipping based on garment silhouette.
-
-This module provides functions to create pre-clipped logos where pixels
-that would fall outside the garment are made transparent.
-"""
-
 import cv2
 import numpy as np
 import tempfile
 import os
 
-# Cache for garment masks to avoid recomputing
 _mask_cache = {}
 
 
 def getGarmentMask(image_path: str) -> np.ndarray:
-    """
-    Get a mask of the garment (non-background) pixels using deep learning.
-    
-    Uses rembg library for accurate foreground detection.
-    
-    Args:
-        image_path: Path to garment image.
-        
-    Returns:
-        Binary mask where 255 = garment, 0 = background.
-    """
-    # Check cache first
+
     if image_path in _mask_cache:
         return _mask_cache[image_path]
     
@@ -35,43 +16,32 @@ def getGarmentMask(image_path: str) -> np.ndarray:
         return None
     
     try:
-        # Use rembg for accurate background removal
         from rembg import remove
         from PIL import Image
         
-        # Convert to PIL Image
         pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        
-        # Remove background (returns RGBA image)
         result = remove(pil_image)
-        
-        # Extract alpha channel as mask
         result_np = np.array(result)
+        
         if result_np.shape[2] == 4:
-            garment_mask = result_np[:, :, 3]  # Alpha channel
+            garment_mask = result_np[:, :, 3]
         else:
-            # Fallback - convert to grayscale
             garment_mask = cv2.cvtColor(result_np, cv2.COLOR_RGB2GRAY)
         
-        # Threshold to get binary mask
         _, garment_mask = cv2.threshold(garment_mask, 127, 255, cv2.THRESH_BINARY)
-        
-        # Cache the result
         _mask_cache[image_path] = garment_mask
         return garment_mask
         
     except Exception as e:
         print(f"[logoClipper] rembg failed, using simple detection: {e}")
-        # Fallback to simple color-based detection
         return _getGarmentMaskSimple(image)
 
 
+# Fallback
 def _getGarmentMaskSimple(image: np.ndarray) -> np.ndarray:
-    """Fallback: simple color-based background detection."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     b, g, r = cv2.split(image)
     
-    # Detect background (white/light pixels)
     is_light = (gray > 240) | ((b > 230) & (g > 230) & (r > 230))
     is_white = (np.abs(b.astype(np.int16) - g.astype(np.int16)) < 10) & \
                (np.abs(g.astype(np.int16) - r.astype(np.int16)) < 10) & \
@@ -89,68 +59,43 @@ def _getGarmentMaskSimple(image: np.ndarray) -> np.ndarray:
 
 def clipLogoToGarment(logo_path: str, garment_image_path: str, 
                        center_x: int, center_y: int, target_size: int = None) -> str:
-    """
-    Clip a logo so only pixels that fall on the garment are visible.
-    
-    Args:
-        logo_path: Path to logo file (PNG or rotated temp file).
-        garment_image_path: Path to garment image.
-        center_x, center_y: Where logo center will be placed.
-        target_size: Optional target size to resize BEFORE clipping. If None, uses original size.
-        
-    Returns:
-        Path to clipped logo temp file.
-    """
-    # Load logo
+    """Clip logo so only pixels over garment are visible. Returns temp file path."""
     logo = _loadLogo(logo_path)
     if logo is None:
-        return logo_path  # Return original on failure
+        return logo_path
     
-    # Get garment mask
     garment_mask = getGarmentMask(garment_image_path)
     if garment_mask is None:
-        return logo_path  # Return original on failure
+        return logo_path
     
-    # RESIZE logo to target_size FIRST (maintaining aspect ratio)
+    # Resize logo if target_size specified
     if target_size is not None:
         lh, lw = logo.shape[:2]
         if lw > 0 and lh > 0:
             scale = target_size / max(lw, lh)
-            new_w = int(lw * scale)
-            new_h = int(lh * scale)
-            logo = cv2.resize(logo, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            logo = cv2.resize(logo, (int(lw * scale), int(lh * scale)), interpolation=cv2.INTER_AREA)
     
-    # Now use the properties (resized or original)
+    # Calculate logo position and extract mask region
     lh, lw = logo.shape[:2]
     gh, gw = garment_mask.shape[:2]
     
-    # Calculate where logo will be placed (center position)
     px = center_x - lw // 2
     py = center_y - lh // 2
     
-    # Extract the garment mask region where logo will be placed
-    x1 = max(0, px)
-    y1 = max(0, py)
-    x2 = min(gw, px + lw)
-    y2 = min(gh, py + lh)
+    x1, y1 = max(0, px), max(0, py)
+    x2, y2 = min(gw, px + lw), min(gh, py + lh)
     
-    lx1 = x1 - px
-    ly1 = y1 - py
-    lx2 = lx1 + (x2 - x1)
-    ly2 = ly1 + (y2 - y1)
+    lx1, ly1 = x1 - px, y1 - py
+    lx2, ly2 = lx1 + (x2 - x1), ly1 + (y2 - y1)
     
     if lx2 <= lx1 or ly2 <= ly1:
-        return logo_path  # Logo outside image
+        return logo_path
     
-    # Get the mask region from garment
+    # Apply garment mask to logo alpha channel
     mask_region = garment_mask[y1:y2, x1:x2]
-    
-    # Create full logo mask (for the logo's coordinate space)
     logo_mask = np.zeros((lh, lw), dtype=np.uint8)
     logo_mask[ly1:ly2, lx1:lx2] = mask_region
     
-    # Apply mask to logo alpha channel
-    # Where mask is 0 (background), make logo transparent
     logo_clipped = logo.copy()
     logo_clipped[:, :, 3] = np.minimum(logo_clipped[:, :, 3], logo_mask)
     

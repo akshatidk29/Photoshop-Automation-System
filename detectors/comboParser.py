@@ -1,9 +1,3 @@
-"""
-Combo Position Parser
-Parses position names from Excel into individual position components.
-Uses positionRegistry.yaml for configuration.
-"""
-
 import re
 from configuration.configLoader import (
     getCanonicalName,
@@ -14,8 +8,6 @@ from configuration.configLoader import (
 def _getAllKnownPositionPatterns():
     """
     Get all known position names and their aliases for pattern matching.
-    Returns a dict: {normalized_pattern: canonical_name}
-    Patterns are sorted by length (longest first) to match greedily.
     """
     registry = getPositionRegistry()
     positions = registry.get('positions', {})
@@ -36,13 +28,7 @@ def _getAllKnownPositionPatterns():
 
 def _tryExtractMultiplePositions(locationName):
     """
-    Try to extract multiple known positions from a combined string.
-    E.g., "Right Chest Left Chest" -> ["RIGHT-CHEST", "LEFT-CHEST"]
-    
-    Uses an interval scheduling algorithm to maximize the number of
-    non-overlapping position matches found in the input string.
-    
-    Returns list of canonical positions if found, else None.
+    Extract multiple known positions from a combined string using interval scheduling.
     """
     # Normalize input: uppercase, convert separators to spaces
     text = str(locationName).upper().replace("-", " ").replace("_", " ").replace("&", " ")
@@ -70,11 +56,11 @@ def _tryExtractMultiplePositions(locationName):
         return None
     
     # Use weighted interval scheduling to prefer LONGER matches when overlapping
-    # This prevents "BACK YOKE" from being split into "BACK" + "YOKE"
-    # 
+
     # Algorithm:
     # 1. Sort by start position, then by length descending (longest first for same start)
     # 2. Greedily select non-overlapping matches, preferring longer ones
+
     allMatches.sort(key=lambda x: (x[0], -(x[1] - x[0])))  # Sort by start, then by length descending
     
     selectedMatches = []
@@ -86,9 +72,7 @@ def _tryExtractMultiplePositions(locationName):
             selectedMatches.append((startIdx, endIdx, canonical))
             lastEnd = endIdx
     
-    # Already sorted by start position
-    
-    # Extract canonical names, removing duplicates while preserving order
+    # Extract canonical names
     found = []
     seen = set()
     for _, _, canonical in selectedMatches:
@@ -119,6 +103,7 @@ def parseComboPosition(locationName):
         return []
     
     # 1. Check for implicit "&" separation first (explicit intent)
+    
     if "&" in locationName:
         parts = locationName.split("&")
         result = [getCanonicalName(p.strip()) for p in parts if p.strip()]
@@ -126,8 +111,7 @@ def parseComboPosition(locationName):
             return result
     
     # 2. Try to extract multiple known positions from the ORIGINAL string
-    # This must happen BEFORE getCanonicalName() which might merge positions
-    # Handles: "Right Chest Left Chest", "LEFT-CHEST-RIGHT-BICEP", "LFT-CHEST-RGT-BICEP"
+
     extracted = _tryExtractMultiplePositions(locationName)
     if extracted:
         return extracted

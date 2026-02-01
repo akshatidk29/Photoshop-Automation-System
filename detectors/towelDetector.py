@@ -1,11 +1,5 @@
-"""
-Towel Detector using YOLO OBB Model with Heuristic Fallback.
-Provides coordinates, rotation, and logo scale for towel/blanket regions.
-"""
-
 import os
 import cv2
-import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from configuration.configLoader import (
@@ -16,8 +10,6 @@ from configuration.configLoader import (
 # Model Path
 MODEL_PATH = Path(__file__).parent / "weights" / "towel" / "best.pt"
 
-# Location Mapping
-# Now handled dynamically via getCanonicalName
 
 # Heuristic Config
 TOWEL_CONFIG = {
@@ -131,7 +123,6 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Priority: OBB Model Detection > Behavior Flags > Heuristic Fallback
     """
     # 1. FIRST: Try OBB model detection (most accurate)
     try:
