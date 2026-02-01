@@ -357,6 +357,8 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """
     Get (x, y) coordinates for placement.
     Uses OBB model first, falls back to MediaPipe Pose if not detected.
+    
+    Returns: tuple of ((x, y), usedFallback) where usedFallback is a bool
     """
     # 1. Try OBB detection first
     try:
@@ -370,7 +372,7 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
             region = regions[targetClass]
             coords = (int(region.center[0]), int(region.center[1]))
             if debug: print(f"[getCoordinates] Found OBB at {coords}")
-            return coords
+            return (coords, False)  # OBB succeeded, no fallback
             
     except Exception as e:
         if debug: print(f"[GarmentDetector] OBB failed: {e}")
@@ -381,7 +383,7 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     # Log clearly that fallback was used
     print(f"[FALLBACK] Position '{locationName}' not detected — using MediaPipe placement at {coords}")
     
-    return coords
+    return (coords, True)  # Fallback was used
 
 def getRotation(imagePath, locationName):
     """

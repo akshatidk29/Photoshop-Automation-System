@@ -61,29 +61,22 @@ class ErrorTracker:
 
 
 class AutomationApp(ctk.CTk):
-    """Modern GUI for Photoshop Automation - Compact Layout."""
+    """Modern GUI for Photoshop Automation."""
     
     def __init__(self, automationCallback=None):
-        """
-        Initialize the automation app.
-        
-        Args:
-            automationCallback: Function to call for running automation.
-                               Signature: callback(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings)
-        """
         super().__init__()
         
         self.automationCallback = automationCallback
         
-        self.title("Photoshop Automation Pro")
-        self.geometry("1200x800")
-        self.minsize(1100, 750)
+        self.title("Photoshop Automation")
+        self.geometry("1100x720")
+        self.minsize(1000, 680)
         
         # Center on screen
         self.update_idletasks()
-        x = (self.winfo_screenwidth() - 1200) // 2
-        y = (self.winfo_screenheight() - 800) // 2
-        self.geometry(f"1200x800+{x}+{y}")
+        x = (self.winfo_screenwidth() - 1100) // 2
+        y = (self.winfo_screenheight() - 720) // 2
+        self.geometry(f"1100x720+{x}+{y}")
         
         # Default paths
         DEFAULT_EXCEL = r"C:\Users\Akshat Mittal\Desktop\photoshopAutomation\Data\\test.xlsx"
@@ -108,371 +101,428 @@ class AutomationApp(ctk.CTk):
         self.logoSizes = getAllLogoSizes() if CONFIG_AVAILABLE else {}
         self.clippingPositions = getAllClippingPositions() if CONFIG_AVAILABLE else {}
         
-        # Color scheme - Premium professional palette
+        # Clean color palette
         self.colors = {
-            'bg_main': '#0f1419',
-            'bg_card': '#1a1f26',
-            'bg_card_hover': '#1f252e',
-            'accent': '#3b82f6',
-            'accent_hover': '#2563eb',
-            'success': '#10b981',
-            'success_hover': '#059669',
-            'warning': '#f59e0b',
-            'error': '#ef4444',
-            'text_primary': '#e5e7eb',
-            'text_secondary': '#9ca3af',
-            'border': '#374151',
-            'border_focus': '#60a5fa'
+            'bg': '#111318',
+            'surface': '#1a1d24',
+            'surface_light': '#22262f',
+            'border': '#2d323c',
+            'border_light': '#3d424f',
+            'primary': '#4f8cff',
+            'primary_hover': '#3d7ae8',
+            'success': '#34d399',
+            'success_hover': '#2cb880',
+            'warning': '#fbbf24',
+            'error': '#f87171',
+            'text': '#f1f5f9',
+            'text_dim': '#94a3b8',
+            'text_muted': '#64748b',
         }
         
+        self.configure(fg_color=self.colors['bg'])
         self._buildUI()
         self._updateStatus()
     
     def _buildUI(self):
-        """Build the premium UI - ultra compact."""
+        """Build the UI layout."""
         # Main container
-        mainContainer = ctk.CTkFrame(self, fg_color="transparent")
-        mainContainer.place(x=0, y=0, relwidth=1, relheight=1)
-        
-        # Inner container with better padding
-        innerContainer = ctk.CTkFrame(mainContainer, fg_color="transparent")
-        innerContainer.pack(fill="both", expand=True, padx=25, pady=15)
-        
-        # ===== LEFT PANEL: Primary Controls =====
-        leftPanel = ctk.CTkFrame(innerContainer, fg_color="transparent")
-        leftPanel.pack(side="left", fill="both", expand=True, padx=(0, 15))
+        main = ctk.CTkFrame(self, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=32, pady=24)
         
         # Header
-        self._buildHeader(leftPanel)
+        self._buildHeader(main)
         
-        # File Selection Card
-        self._buildFileSelection(leftPanel)
+        # Content area - two columns
+        content = ctk.CTkFrame(main, fg_color="transparent")
+        content.pack(fill="both", expand=True, pady=(20, 0))
         
-        # Settings Card
-        self._buildSettings(leftPanel)
+        # Left column - Main controls
+        left = ctk.CTkFrame(content, fg_color="transparent")
+        left.pack(side="left", fill="both", expand=True, padx=(0, 12))
         
-        # Progress & Start Button
-        self._buildProgressSection(leftPanel)
+        self._buildSourceFiles(left)
+        self._buildConfiguration(left)
+        self._buildActions(left)
         
-        # ===== RIGHT PANEL: Advanced Configuration =====
-        rightPanel = ctk.CTkFrame(innerContainer, width=360, fg_color="transparent")
-        rightPanel.pack(side="right", fill="y")
-        rightPanel.pack_propagate(False)
+        # Right column - Advanced settings
+        right = ctk.CTkFrame(content, width=400, fg_color="transparent")
+        right.pack(side="right", fill="y")
+        right.pack_propagate(False)
         
-        self._buildAdvancedConfig(rightPanel)
+        self._buildAdvancedPanel(right)
     
     def _buildHeader(self, parent):
-        """Build professional header."""
-        headerFrame = ctk.CTkFrame(parent, fg_color="transparent")
-        headerFrame.pack(fill="x", pady=(0, 12))
+        """Build the header section."""
+        header = ctk.CTkFrame(parent, fg_color="transparent")
+        header.pack(fill="x")
         
-        # Separator line
-        separator = ctk.CTkFrame(headerFrame, height=1, fg_color=self.colors['border'])
-        separator.pack(fill="x", pady=(10, 0))
-    
-    def _buildFileSelection(self, parent):
-        """Build file selection card."""
-        # Card header
-        headerLabel = ctk.CTkLabel(
+        # Title
+        ctk.CTkLabel(
+            header,
+            text="Photoshop Automation",
+            font=ctk.CTkFont(family="Segoe UI", size=32, weight="bold"),
+            text_color=self.colors['text']
+        ).pack(side="left")
+        
+    def _buildSourceFiles(self, parent):
+        """Build source files section."""
+        # Section label
+        ctk.CTkLabel(
             parent,
-            text="Source Files",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=self.colors['text_primary'],
-            anchor="w"
-        )
-        headerLabel.pack(anchor="w", pady=(0, 8))
+            text="SOURCE FILES",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=self.colors['text']
+        ).pack(anchor="w", pady=(0, 8))
         
-        # Card body
+        # Card
         card = ctk.CTkFrame(
             parent,
-            fg_color=self.colors['bg_card'],
-            corner_radius=8,
+            fg_color=self.colors['surface'],
+            corner_radius=12,
             border_width=1,
             border_color=self.colors['border']
         )
-        card.pack(fill="x", pady=(0, 10))
+        card.pack(fill="x", pady=(0, 20))
         
-        cardContent = ctk.CTkFrame(card, fg_color="transparent")
-        cardContent.pack(fill="both", expand=True, padx=20, pady=18)
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=20, pady=20)
         
-        # Excel file
-        self.excelStatusLabel = self._createFileRow(
-            cardContent, "Excel Data", "excel"
-        )
-        
-        # Images folder
-        self.imagesStatusLabel = self._createFileRow(
-            cardContent, "Product Images", "images"
-        )
-        
-        # Logos folder
-        self.logosStatusLabel = self._createFileRow(
-            cardContent, "Logo Assets", "logos"
-        )
+        # File rows
+        self.excelStatus = self._createFileRow(inner, "Excel Data File", "excel", 0)
+        self.imagesStatus = self._createFileRow(inner, "Product Images Folder", "images", 1)
+        self.logosStatus = self._createFileRow(inner, "Logo Assets Folder", "logos", 2)
     
-    def _buildSettings(self, parent):
-        """Build settings card."""
-        # Card header
-        headerLabel = ctk.CTkLabel(
-            parent,
-            text="Configuration",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=self.colors['text_primary'],
-            anchor="w"
-        )
-        headerLabel.pack(anchor="w", pady=(0, 8))
+    def _createFileRow(self, parent, label, fileType, index):
+        """Create a file selection row."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", pady=(0 if index == 0 else 12, 0))
         
-        # Card body
-        card = ctk.CTkFrame(
-            parent,
-            fg_color=self.colors['bg_card'],
-            corner_radius=8,
-            border_width=1,
-            border_color=self.colors['border']
-        )
-        card.pack(fill="x", pady=(0, 10))
-        
-        cardContent = ctk.CTkFrame(card, fg_color="transparent")
-        cardContent.pack(fill="both", expand=True, padx=20, pady=18)
-        
-        # Canvas Size Section
-        canvasFrame = ctk.CTkFrame(cardContent, fg_color="transparent")
-        canvasFrame.pack(fill="x", pady=(0, 10))
+        # Left side - label and status
+        leftSide = ctk.CTkFrame(row, fg_color="transparent")
+        leftSide.pack(side="left", fill="x", expand=True)
         
         ctk.CTkLabel(
-            canvasFrame,
+            leftSide,
+            text=label,
+            font=ctk.CTkFont(size=14),
+            text_color=self.colors['text'],
+            anchor="w"
+        ).pack(anchor="w")
+        
+        # Status indicator
+        statusFrame = ctk.CTkFrame(leftSide, fg_color="transparent")
+        statusFrame.pack(anchor="w", pady=(4, 0))
+        
+        # Dot indicator
+        dot = ctk.CTkFrame(statusFrame, width=8, height=8, corner_radius=4)
+        dot.pack(side="left")
+        
+        statusLabel = ctk.CTkLabel(
+            statusFrame,
+            text="Not selected",
+            font=ctk.CTkFont(size=11),
+            text_color=self.colors['text_muted'],
+            anchor="w"
+        )
+        statusLabel.pack(side="left", padx=(8, 0))
+        
+        # Set initial state
+        path = None
+        if fileType == "excel":
+            path = self.excelPath
+        elif fileType == "images":
+            path = self.imageRoot
+        elif fileType == "logos":
+            path = self.logoRoot
+        
+        if path:
+            dot.configure(fg_color=self.colors['success'])
+            statusLabel.configure(
+                text=os.path.basename(path),
+                text_color=self.colors['text_dim']
+            )
+        else:
+            dot.configure(fg_color=self.colors['warning'])
+        
+        # Browse button
+        ctk.CTkButton(
+            row,
+            text="Browse",
+            width=80,
+            height=32,
+            corner_radius=6,
+            font=ctk.CTkFont(size=12),
+            fg_color=self.colors['surface_light'],
+            hover_color=self.colors['border'],
+            text_color=self.colors['text'],
+            command=lambda: self._browseFile(fileType, dot, statusLabel)
+        ).pack(side="right")
+        
+        return (dot, statusLabel)
+    
+    def _buildConfiguration(self, parent):
+        """Build configuration section."""
+        # Section label
+        ctk.CTkLabel(
+            parent,
+            text="CONFIGURATION",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=self.colors['text']
+        ).pack(anchor="w", pady=(0, 8))
+        
+        # Card
+        card = ctk.CTkFrame(
+            parent,
+            fg_color=self.colors['surface'],
+            corner_radius=12,
+            border_width=1,
+            border_color=self.colors['border']
+        )
+        card.pack(fill="x", pady=(0, 20))
+        
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=20, pady=20)
+        
+        # Canvas size
+        sizeFrame = ctk.CTkFrame(inner, fg_color="transparent")
+        sizeFrame.pack(fill="x")
+        
+        ctk.CTkLabel(
+            sizeFrame,
             text="Canvas Height",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors['text_primary']
-        ).pack(anchor="w", pady=(0, 6))
+            font=ctk.CTkFont(size=15),
+            text_color=self.colors['text']
+        ).pack(anchor="w")
         
-        radioFrame = ctk.CTkFrame(canvasFrame, fg_color="transparent")
-        radioFrame.pack(fill="x")
+        radioFrame = ctk.CTkFrame(sizeFrame, fg_color="transparent")
+        radioFrame.pack(anchor="w", pady=(8, 0))
         
-        radio1 = ctk.CTkRadioButton(
+        ctk.CTkRadioButton(
             radioFrame,
-            text="1800px (Apparel)",
+            text="1800px  Apparel",
             variable=self.canvasSize,
             value="1800",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary'],
-            fg_color=self.colors['accent'],
-            hover_color=self.colors['accent_hover']
-        )
-        radio1.pack(side="left", padx=(0, 20))
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_dim'],
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
+            border_color=self.colors['border_light']
+        ).pack(side="left", padx=(0, 24))
         
-        radio2 = ctk.CTkRadioButton(
+        ctk.CTkRadioButton(
             radioFrame,
-            text="1200px (Square)",
+            text="1200px  Square",
             variable=self.canvasSize,
             value="1200",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary'],
-            fg_color=self.colors['accent'],
-            hover_color=self.colors['accent_hover']
-        )
-        radio2.pack(side="left")
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_dim'],
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
+            border_color=self.colors['border_light']
+        ).pack(side="left")
         
-        # Separator
-        sep = ctk.CTkFrame(cardContent, height=1, fg_color=self.colors['border'])
-        sep.pack(fill="x", pady=10)
+        # Divider
+        ctk.CTkFrame(inner, height=1, fg_color=self.colors['border']).pack(fill="x", pady=16)
         
-        # Options
-        optionsFrame = ctk.CTkFrame(cardContent, fg_color="transparent")
-        optionsFrame.pack(fill="x")
-        
-        ctk.CTkLabel(
-            optionsFrame,
-            text="Processing Options",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors['text_primary']
-        ).pack(anchor="w", pady=(0, 6))
-        
+        # Clear outputs option
         ctk.CTkCheckBox(
-            optionsFrame,
+            inner,
             text="Clear previous outputs before processing",
             variable=self.clearAssets,
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary'],
-            fg_color=self.colors['accent'],
-            hover_color=self.colors['accent_hover'],
-            checkmark_color=self.colors['bg_card']
+            font=ctk.CTkFont(size=14),
+            text_color=self.colors['text_dim'],
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
+            border_color=self.colors['border_light'],
+            checkmark_color=self.colors['bg']
         ).pack(anchor="w")
     
-    def _buildProgressSection(self, parent):
-        """Build progress section and start button."""
-        # Progress Card header
-        headerLabel = ctk.CTkLabel(
+    def _buildActions(self, parent):
+        """Build actions section."""
+        # Progress section
+        progressFrame = ctk.CTkFrame(
             parent,
-            text="Status",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=self.colors['text_primary'],
-            anchor="w"
-        )
-        headerLabel.pack(anchor="w", pady=(0, 8))
-        
-        # Progress Card
-        progressCard = ctk.CTkFrame(
-            parent,
-            fg_color=self.colors['bg_card'],
-            corner_radius=8,
+            fg_color=self.colors['surface'],
+            corner_radius=12,
             border_width=1,
             border_color=self.colors['border']
         )
-        progressCard.pack(fill="x", pady=(0, 12))
+        progressFrame.pack(fill="x", pady=(0, 16))
         
-        progressContent = ctk.CTkFrame(progressCard, fg_color="transparent")
-        progressContent.pack(fill="both", expand=True, padx=20, pady=18)
+        progressInner = ctk.CTkFrame(progressFrame, fg_color="transparent")
+        progressInner.pack(fill="x", padx=20, pady=16)
         
         # Progress bar
         self.progressBar = ctk.CTkProgressBar(
-            progressContent,
-            height=8,
-            corner_radius=4,
+            progressInner,
+            height=6,
+            corner_radius=3,
             fg_color=self.colors['border'],
-            progress_color=self.colors['accent']
+            progress_color=self.colors['primary']
         )
-        self.progressBar.pack(fill="x", pady=(0, 8))
+        self.progressBar.pack(fill="x")
         self.progressBar.set(0)
         
-        # Status text
-        statusFrame = ctk.CTkFrame(progressContent, fg_color="transparent")
-        statusFrame.pack(fill="x")
+        # Status row
+        statusRow = ctk.CTkFrame(progressInner, fg_color="transparent")
+        statusRow.pack(fill="x", pady=(10, 0))
         
         self.progressLabel = ctk.CTkLabel(
-            statusFrame,
-            text="Ready to process",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary'],
-            anchor="w"
+            statusRow,
+            text="Ready",
+            font=ctk.CTkFont(size=14),
+            text_color=self.colors['text_dim']
         )
         self.progressLabel.pack(side="left")
         
         self.timeLabel = ctk.CTkLabel(
-            statusFrame,
+            statusRow,
             text="",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary'],
-            anchor="e"
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_muted']
         )
         self.timeLabel.pack(side="right")
         
-        # Start Button - Prominent CTA
+        # Start button
         self.startBtn = ctk.CTkButton(
             parent,
-            text="START AUTOMATION",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            height=50,
-            corner_radius=8,
+            text="Start Processing",
+            height=48,
+            corner_radius=10,
+            font=ctk.CTkFont(size=18, weight="bold"),
             fg_color=self.colors['success'],
             hover_color=self.colors['success_hover'],
-            text_color="white",
+            text_color="#111318",
             command=self._startAutomation
         )
         self.startBtn.pack(fill="x")
     
-    def _buildAdvancedConfig(self, parent):
-        """Build advanced configuration panel."""
-        # Section header
-        headerFrame = ctk.CTkFrame(parent, fg_color="transparent")
-        headerFrame.pack(fill="x", pady=(0, 10))
-        
+    def _buildAdvancedPanel(self, parent):
+        """Build advanced settings panel."""
+        # Section label
         ctk.CTkLabel(
-            headerFrame,
-            text="Advanced Settings",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=self.colors['text_primary']
-        ).pack(anchor="w")
-        
-        # Scrollable area for advanced settings
-        scrollFrame = ctk.CTkScrollableFrame(
             parent,
-            fg_color=self.colors['bg_card'],
-            corner_radius=8,
+            text="ADVANCED",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=self.colors['text']
+        ).pack(anchor="w", pady=(0, 8))
+        
+        # Scrollable card
+        scroll = ctk.CTkScrollableFrame(
+            parent,
+            fg_color=self.colors['surface'],
+            corner_radius=12,
             border_width=1,
             border_color=self.colors['border']
         )
-        scrollFrame.pack(fill="both", expand=True)
+        scroll.pack(fill="both", expand=True)
         
-        # Logo Settings
-        self._buildLogoSettings(scrollFrame)
+        # Clipping section (above)
+        self._buildClippingSection(scroll)
         
-        # Clipping Settings
-        self._buildClippingSettings(scrollFrame)
+        # Divider
+        ctk.CTkFrame(scroll, height=1, fg_color=self.colors['border']).pack(fill="x", padx=16, pady=12)
+        
+        # Logo sizing section (below with inline scroll)
+        self._buildLogoSection(scroll)
     
-    def _buildLogoSettings(self, parent):
-        """Build logo settings section."""
+    def _buildLogoSection(self, parent):
+        """Build logo sizing section."""
         section = ctk.CTkFrame(parent, fg_color="transparent")
-        section.pack(fill="x", padx=16, pady=(16, 10))
+        section.pack(fill="x", padx=16, pady=(0, 16))
         
-        # Header with edit button
+        # Header row
         headerRow = ctk.CTkFrame(section, fg_color="transparent")
-        headerRow.pack(fill="x", pady=(0, 8))
+        headerRow.pack(fill="x")
         
         ctk.CTkLabel(
             headerRow,
             text="Logo Sizing",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors['text_primary']
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=self.colors['text']
         ).pack(side="left")
         
-        editBtn = ctk.CTkButton(
+        ctk.CTkButton(
             headerRow,
-            text="Configure",
-            width=85,
+            text="Edit All",
+            width=60,
             height=26,
             corner_radius=6,
-            font=ctk.CTkFont(size=10),
-            fg_color=self.colors['bg_card_hover'],
+            font=ctk.CTkFont(size=13),
+            fg_color=self.colors['surface_light'],
             hover_color=self.colors['border'],
+            text_color=self.colors['text_dim'],
             command=self._openSizeEditor
-        )
-        editBtn.pack(side="right")
+        ).pack(side="right")
         
-        # Use Excel size checkbox
+        # Use Excel checkbox
         ctk.CTkCheckBox(
             section,
-            text="Use custom logo size from Excel",
+            text="Use size from Excel column",
             variable=self.useExcelSize,
-            font=ctk.CTkFont(size=10),
-            text_color=self.colors['text_secondary'],
-            fg_color=self.colors['accent'],
-            hover_color=self.colors['accent_hover'],
-            checkmark_color=self.colors['bg_card']
-        ).pack(anchor="w", pady=(0, 6))
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_dim'],
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
+            border_color=self.colors['border_light'],
+            checkmark_color=self.colors['bg']
+        ).pack(anchor="w", pady=(12, 0))
         
-        # Size preview
-        sizePreview = ", ".join([f"{k}: {v}px" for k, v in list(self.logoSizes.items())[:3]])
-        self.sizePreviewLabel = ctk.CTkLabel(
+        # Inline scrollable size list
+        self.sizeListFrame = ctk.CTkScrollableFrame(
             section,
-            text=f"{sizePreview}..." if sizePreview else "No sizes configured",
-            font=ctk.CTkFont(size=9),
-            text_color=self.colors['text_secondary'],
-            anchor="w",
-            wraplength=300
+            height=180,
+            fg_color=self.colors['bg'],
+            corner_radius=8,
+            border_width=1,
+            border_color=self.colors['border']
         )
-        self.sizePreviewLabel.pack(anchor="w")
+        self.sizeListFrame.pack(fill="x", pady=(12, 0))
         
-        # Separator
-        ctk.CTkFrame(parent, height=1, fg_color=self.colors['border']).pack(fill="x", padx=16, pady=10)
+        self._populateSizeList()
     
-    def _buildClippingSettings(self, parent):
-        """Build clipping settings section."""
-        section = ctk.CTkFrame(parent, fg_color="transparent")
-        section.pack(fill="x", padx=16, pady=(0, 16))
+    def _populateSizeList(self):
+        """Populate the inline size list."""
+        # Clear existing
+        for widget in self.sizeListFrame.winfo_children():
+            widget.destroy()
         
-        # Header with toggle
+        for pos, size in sorted(self.logoSizes.items()):
+            row = ctk.CTkFrame(self.sizeListFrame, fg_color="transparent")
+            row.pack(fill="x", padx=10, pady=4)
+            
+            ctk.CTkLabel(
+                row,
+                text=pos,
+                font=ctk.CTkFont(size=12),
+                text_color=self.colors['text_dim'],
+                anchor="w"
+            ).pack(side="left", fill="x", expand=True)
+            
+            ctk.CTkLabel(
+                row,
+                text=f"{size} px",
+                font=ctk.CTkFont(size=12),
+                text_color=self.colors['text_muted']
+            ).pack(side="right")
+    
+    def _buildClippingSection(self, parent):
+        """Build clipping section."""
+        section = ctk.CTkFrame(parent, fg_color="transparent")
+        section.pack(fill="x", padx=16, pady=(16, 0))
+        
+        # Header row
         headerRow = ctk.CTkFrame(section, fg_color="transparent")
-        headerRow.pack(fill="x", pady=(0, 8))
+        headerRow.pack(fill="x")
         
         ctk.CTkLabel(
             headerRow,
             text="Logo Clipping",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=self.colors['text_primary']
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=self.colors['text']
         ).pack(side="left")
         
-        clipSwitch = ctk.CTkSwitch(
+        ctk.CTkSwitch(
             headerRow,
             text="",
             width=40,
@@ -480,106 +530,35 @@ class AutomationApp(ctk.CTk):
             variable=self.clippingEnabled,
             command=self._onClippingToggle,
             fg_color=self.colors['border'],
-            progress_color=self.colors['accent'],
-            button_color=self.colors['text_primary'],
-            button_hover_color=self.colors['text_secondary']
-        )
-        clipSwitch.pack(side="right")
+            progress_color=self.colors['primary'],
+            button_color=self.colors['text'],
+            button_hover_color=self.colors['text_dim']
+        ).pack(side="right")
         
         # Description
         ctk.CTkLabel(
             section,
             text="Clips logo parts extending beyond garment edges",
-            font=ctk.CTkFont(size=9),
-            text_color=self.colors['text_secondary'],
-            anchor="w",
-            wraplength=300
-        ).pack(anchor="w", pady=(0, 8))
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_muted'],
+            wraplength=320
+        ).pack(anchor="w", pady=(8, 0))
         
         # Configure button
-        configBtn = ctk.CTkButton(
+        ctk.CTkButton(
             section,
             text="Configure Positions",
-            height=30,
+            height=34,
             corner_radius=6,
-            font=ctk.CTkFont(size=10),
-            fg_color=self.colors['bg_card_hover'],
+            font=ctk.CTkFont(size=13),
+            fg_color=self.colors['surface_light'],
             hover_color=self.colors['border'],
+            text_color=self.colors['text_dim'],
             command=self._openClippingEditor
-        )
-        configBtn.pack(fill="x")
+        ).pack(fill="x", pady=(12, 0))
     
-    def _createFileRow(self, parent, label, fileType):
-        """Create a file selection row - compact version."""
-        rowContainer = ctk.CTkFrame(parent, fg_color="transparent")
-        rowContainer.pack(fill="x", pady=(0, 10))
-        
-        # Label
-        ctk.CTkLabel(
-            rowContainer,
-            text=label,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.colors['text_primary'],
-            anchor="w"
-        ).pack(anchor="w", pady=(0, 4))
-        
-        # Status and browse row
-        actionFrame = ctk.CTkFrame(rowContainer, fg_color="transparent")
-        actionFrame.pack(fill="x")
-        
-        # Status indicator
-        statusFrame = ctk.CTkFrame(
-            actionFrame,
-            fg_color=self.colors['bg_main'],
-            corner_radius=6,
-            height=36
-        )
-        statusFrame.pack(side="left", fill="x", expand=True, padx=(0, 6))
-        
-        statusLabel = ctk.CTkLabel(
-            statusFrame,
-            text="No file selected",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['warning'],
-            anchor="w"
-        )
-        statusLabel.pack(side="left", padx=12, fill="x", expand=True)
-        
-        # Browse button
-        browseBtn = ctk.CTkButton(
-            actionFrame,
-            text="Browse",
-            width=90,
-            height=36,
-            corner_radius=6,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color=self.colors['accent'],
-            hover_color=self.colors['accent_hover'],
-            command=lambda: self._browseFile(fileType, statusLabel)
-        )
-        browseBtn.pack(side="right")
-        
-        # Set initial status if path exists
-        if fileType == "excel" and self.excelPath:
-            statusLabel.configure(
-                text=f"✓  {os.path.basename(self.excelPath)}",
-                text_color=self.colors['success']
-            )
-        elif fileType == "images" and self.imageRoot:
-            statusLabel.configure(
-                text=f"✓  {os.path.basename(self.imageRoot)}",
-                text_color=self.colors['success']
-            )
-        elif fileType == "logos" and self.logoRoot:
-            statusLabel.configure(
-                text=f"✓  {os.path.basename(self.logoRoot)}",
-                text_color=self.colors['success']
-            )
-        
-        return statusLabel
-    
-    def _browseFile(self, fileType, statusLabel):
-        """Handle file browsing with visual feedback."""
+    def _browseFile(self, fileType, dot, statusLabel):
+        """Handle file browsing."""
         if fileType == "excel":
             path = filedialog.askopenfilename(
                 title="Select Excel File",
@@ -587,113 +566,107 @@ class AutomationApp(ctk.CTk):
             )
             if path:
                 self.excelPath = path
-                statusLabel.configure(
-                    text=f"✓  {os.path.basename(path)}",
-                    text_color=self.colors['success']
-                )
         elif fileType == "images":
             path = filedialog.askdirectory(title="Select Product Images Folder")
             if path:
                 self.imageRoot = path
-                statusLabel.configure(
-                    text=f"✓  {os.path.basename(path)}",
-                    text_color=self.colors['success']
-                )
         elif fileType == "logos":
             path = filedialog.askdirectory(title="Select Logo Assets Folder")
             if path:
                 self.logoRoot = path
-                statusLabel.configure(
-                    text=f"✓  {os.path.basename(path)}",
-                    text_color=self.colors['success']
-                )
+        else:
+            path = None
+        
+        if path:
+            dot.configure(fg_color=self.colors['success'])
+            statusLabel.configure(
+                text=os.path.basename(path),
+                text_color=self.colors['text_dim']
+            )
         
         self._updateStatus()
     
     def _updateStatus(self):
-        """Update start button state with visual feedback."""
+        """Update start button state."""
         if self.excelPath and self.imageRoot and self.logoRoot:
             self.startBtn.configure(state="normal")
         else:
             self.startBtn.configure(state="disabled")
     
     def _openSizeEditor(self):
-        """Open logo size editor dialog with improved design."""
+        """Open logo size editor dialog."""
         dialog = ctk.CTkToplevel(self)
-        dialog.title("Logo Size Configuration")
-        dialog.geometry("550x650")
+        dialog.title("Logo Sizes")
+        dialog.geometry("480x580")
         dialog.transient(self)
         dialog.grab_set()
+        dialog.configure(fg_color=self.colors['bg'])
         
         # Center dialog
         dialog.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() - 550) // 2
-        y = self.winfo_y() + (self.winfo_height() - 650) // 2
+        x = self.winfo_x() + (self.winfo_width() - 480) // 2
+        y = self.winfo_y() + (self.winfo_height() - 580) // 2
         dialog.geometry(f"+{x}+{y}")
         
-        # Configure dialog colors
-        dialog.configure(fg_color=self.colors['bg_main'])
-        
         # Header
-        headerFrame = ctk.CTkFrame(dialog, fg_color="transparent")
-        headerFrame.pack(fill="x", padx=30, pady=(30, 10))
+        header = ctk.CTkFrame(dialog, fg_color="transparent")
+        header.pack(fill="x", padx=24, pady=(24, 16))
         
         ctk.CTkLabel(
-            headerFrame,
+            header,
             text="Logo Size Configuration",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=self.colors['text_primary']
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=self.colors['text']
         ).pack(anchor="w")
         
         ctk.CTkLabel(
-            headerFrame,
-            text="Set logo width in pixels for each decoration position",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary']
+            header,
+            text="Set logo width in pixels for each position",
+            font=ctk.CTkFont(size=13),
+            text_color=self.colors['text_muted']
         ).pack(anchor="w", pady=(4, 0))
         
-        # Scrollable content
-        scrollFrame = ctk.CTkScrollableFrame(
+        # Content
+        scroll = ctk.CTkScrollableFrame(
             dialog,
-            fg_color=self.colors['bg_card'],
+            fg_color=self.colors['surface'],
             corner_radius=10,
             border_width=1,
             border_color=self.colors['border']
         )
-        scrollFrame.pack(fill="both", expand=True, padx=30, pady=(10, 20))
+        scroll.pack(fill="both", expand=True, padx=24, pady=(0, 16))
         
         entries = {}
-        for pos, size in sorted(self.logoSizes.items()):
-            row = ctk.CTkFrame(scrollFrame, fg_color="transparent")
-            row.pack(fill="x", padx=15, pady=5)
+        for i, (pos, size) in enumerate(sorted(self.logoSizes.items())):
+            row = ctk.CTkFrame(scroll, fg_color="transparent")
+            row.pack(fill="x", padx=12, pady=(12 if i == 0 else 6, 6 if i == len(self.logoSizes)-1 else 0))
             
             ctk.CTkLabel(
                 row,
                 text=pos,
-                font=ctk.CTkFont(size=10),
-                text_color=self.colors['text_primary'],
-                width=200,
+                font=ctk.CTkFont(size=11),
+                text_color=self.colors['text_dim'],
                 anchor="w"
-            ).pack(side="left")
+            ).pack(side="left", fill="x", expand=True)
             
             entry = ctk.CTkEntry(
                 row,
-                width=70,
+                width=60,
                 height=28,
                 corner_radius=6,
-                fg_color=self.colors['bg_main'],
+                fg_color=self.colors['bg'],
                 border_color=self.colors['border'],
-                text_color=self.colors['text_primary']
+                text_color=self.colors['text']
             )
             entry.insert(0, str(size))
-            entry.pack(side="right", padx=(0, 5))
+            entry.pack(side="right")
             
             ctk.CTkLabel(
                 row,
                 text="px",
                 font=ctk.CTkFont(size=10),
-                text_color=self.colors['text_secondary']
-            ).pack(side="right")
+                text_color=self.colors['text_muted']
+            ).pack(side="right", padx=(0, 8))
             
             entries[pos] = entry
         
@@ -705,80 +678,78 @@ class AutomationApp(ctk.CTk):
                         updateLogoSize(pos, int(entry.get()))
                 except:
                     pass
-            preview = ", ".join([f"{k}: {v}px" for k, v in list(self.logoSizes.items())[:3]])
-            self.sizePreviewLabel.configure(text=f"{preview}..." if preview else "No sizes configured")
+            self._populateSizeList()
             dialog.destroy()
         
-        # Save button
         ctk.CTkButton(
             dialog,
-            text="Save Changes",
-            height=42,
+            text="Save",
+            height=40,
             corner_radius=8,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=self.colors['success'],
-            hover_color=self.colors['success_hover'],
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
             command=save
-        ).pack(fill="x", padx=30, pady=(0, 30))
+        ).pack(fill="x", padx=24, pady=(0, 24))
     
     def _openClippingEditor(self):
-        """Open clipping positions editor with improved design."""
+        """Open clipping positions editor."""
         dialog = ctk.CTkToplevel(self)
-        dialog.title("Clipping Position Configuration")
-        dialog.geometry("550x650")
+        dialog.title("Clipping Positions")
+        dialog.geometry("480x580")
         dialog.transient(self)
         dialog.grab_set()
+        dialog.configure(fg_color=self.colors['bg'])
         
         # Center dialog
-        x = self.winfo_x() + (self.winfo_width() - 550) // 2
-        y = self.winfo_y() + (self.winfo_height() - 650) // 2
+        x = self.winfo_x() + (self.winfo_width() - 480) // 2
+        y = self.winfo_y() + (self.winfo_height() - 580) // 2
         dialog.geometry(f"+{x}+{y}")
         
-        dialog.configure(fg_color=self.colors['bg_main'])
-        
         # Header
-        headerFrame = ctk.CTkFrame(dialog, fg_color="transparent")
-        headerFrame.pack(fill="x", padx=30, pady=(30, 10))
+        header = ctk.CTkFrame(dialog, fg_color="transparent")
+        header.pack(fill="x", padx=24, pady=(24, 16))
         
         ctk.CTkLabel(
-            headerFrame,
+            header,
             text="Clipping Positions",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=self.colors['text_primary']
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=self.colors['text']
         ).pack(anchor="w")
         
         ctk.CTkLabel(
-            headerFrame,
-            text="Enable or disable logo clipping for specific positions",
-            font=ctk.CTkFont(size=11),
-            text_color=self.colors['text_secondary']
+            header,
+            text="Enable clipping for specific positions",
+            font=ctk.CTkFont(size=12),
+            text_color=self.colors['text_muted']
         ).pack(anchor="w", pady=(4, 0))
         
-        # Scrollable content
-        scrollFrame = ctk.CTkScrollableFrame(
+        # Content
+        scroll = ctk.CTkScrollableFrame(
             dialog,
-            fg_color=self.colors['bg_card'],
+            fg_color=self.colors['surface'],
             corner_radius=10,
             border_width=1,
             border_color=self.colors['border']
         )
-        scrollFrame.pack(fill="both", expand=True, padx=30, pady=(10, 20))
+        scroll.pack(fill="both", expand=True, padx=24, pady=(0, 16))
         
         checkVars = {}
-        for pos, enabled in sorted(self.clippingPositions.items()):
+        for i, (pos, enabled) in enumerate(sorted(self.clippingPositions.items())):
             var = ctk.BooleanVar(value=enabled)
             checkVars[pos] = var
             
             ctk.CTkCheckBox(
-                scrollFrame,
+                scroll,
                 text=pos,
                 variable=var,
-                font=ctk.CTkFont(size=10),
-                text_color=self.colors['text_primary'],
-                fg_color=self.colors['accent'],
-                hover_color=self.colors['accent_hover'],
-                checkmark_color=self.colors['bg_card']
-            ).pack(anchor="w", padx=15, pady=3)
+                font=ctk.CTkFont(size=11),
+                text_color=self.colors['text_dim'],
+                fg_color=self.colors['primary'],
+                hover_color=self.colors['primary_hover'],
+                border_color=self.colors['border_light'],
+                checkmark_color=self.colors['bg']
+            ).pack(anchor="w", padx=12, pady=(12 if i == 0 else 4, 4))
         
         def save():
             for pos, var in checkVars.items():
@@ -787,25 +758,24 @@ class AutomationApp(ctk.CTk):
                 updateClippingConfig(self.clippingEnabled.get(), self.clippingPositions)
             dialog.destroy()
         
-        # Save button
         ctk.CTkButton(
             dialog,
-            text="Save Changes",
-            height=42,
+            text="Save",
+            height=40,
             corner_radius=8,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=self.colors['success'],
-            hover_color=self.colors['success_hover'],
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color=self.colors['primary'],
+            hover_color=self.colors['primary_hover'],
             command=save
-        ).pack(fill="x", padx=30, pady=(0, 30))
+        ).pack(fill="x", padx=24, pady=(0, 24))
     
     def _onClippingToggle(self):
-        """Handle clipping toggle with config update."""
+        """Handle clipping toggle."""
         if CONFIG_AVAILABLE:
             updateClippingConfig(self.clippingEnabled.get(), self.clippingPositions)
     
     def _startAutomation(self):
-        """Start automation with visual feedback."""
+        """Start automation."""
         if self.processing:
             return
         
@@ -815,14 +785,14 @@ class AutomationApp(ctk.CTk):
         
         self.processing = True
         self.startBtn.configure(
-            text="PROCESSING...",
+            text="Processing...",
             state="disabled",
-            fg_color=self.colors['text_secondary']
+            fg_color=self.colors['text_muted']
         )
+        self.progressLabel.configure(text="Starting...")
         self.startTime = time.time()
         self.errorTracker = ErrorTracker()
         
-        # Capture settings in main thread
         try:
             canvasHeight = int(self.canvasSize.get())
         except:
@@ -860,7 +830,7 @@ class AutomationApp(ctk.CTk):
                 pass
     
     def _runAutomation(self, canvasHeight, settings):
-        """Run automation in thread with pre-captured settings."""
+        """Run automation in thread."""
         success = self.automationCallback(
             self.excelPath, self.imageRoot, self.logoRoot,
             canvasHeight, self, settings
@@ -870,19 +840,18 @@ class AutomationApp(ctk.CTk):
         self.after(0, lambda: self._showCompletion(success))
     
     def _showCompletion(self, success):
-        """Show completion dialog with enhanced design."""
+        """Show completion dialog."""
         errors = self.errorTracker.getCount()
         
         if success and errors == 0:
             messagebox.showinfo(
-                "Success",
-                "Automation completed successfully!\n\n"
-                "Check 'Output/' for results."
+                "Complete",
+                "Processing completed successfully.\n\nOutput saved to 'Output/' folder."
             )
         elif success:
             if messagebox.askyesno(
-                "Completed with Errors",
-                f"Completed with {errors} errors.\n\nSave error report?"
+                "Complete with Errors",
+                f"Processing completed with {errors} errors.\n\nSave error report?"
             ):
                 path = filedialog.asksaveasfilename(
                     defaultextension=".txt",
@@ -891,34 +860,32 @@ class AutomationApp(ctk.CTk):
                 if path:
                     self.errorTracker.saveReport(path)
         else:
-            messagebox.showerror("Error", "Automation failed. Check console.")
+            messagebox.showerror("Error", "Processing failed. Check console for details.")
         
         self.destroy()
     
     def updateProgress(self, current, total):
-        """Update progress bar with smooth animation."""
+        """Update progress bar."""
         if total == 0:
             return
         
         progress = current / total
         self.progressBar.set(progress)
         
-        # Update status text
         self.progressLabel.configure(
-            text=f"Processing {current} of {total} items ({progress*100:.0f}%)"
+            text=f"Processing {current} of {total}"
         )
         
-        # Update time estimate
         if current > 0 and self.startTime:
             elapsed = time.time() - self.startTime
             remaining = (elapsed / current) * (total - current)
             
             if remaining < 60:
-                timeText = f"{int(remaining)}s remaining"
+                timeText = f"{int(remaining)}s left"
             else:
                 mins = int(remaining // 60)
                 secs = int(remaining % 60)
-                timeText = f"{mins}m {secs}s remaining"
+                timeText = f"{mins}m {secs}s left"
             
             self.timeLabel.configure(text=timeText)
         

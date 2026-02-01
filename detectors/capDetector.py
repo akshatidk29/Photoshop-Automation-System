@@ -120,7 +120,10 @@ def _getHeuristicCoordinates(imagePath, locationName):
 # Public Interface
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
-    """Get (x, y) coordinates for placement (OBB -> Heuristic)."""
+    """Get (x, y) coordinates for placement (OBB -> Heuristic).
+    
+    Returns: tuple of ((x, y), usedFallback) where usedFallback is a bool
+    """
     # 1. Try OBB
     try:
         regions = _getRegions(imagePath)
@@ -130,13 +133,14 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
             region = regions[targetClass]
             coords = (int(region.center[0]), int(region.center[1]))
             if debug: print(f"[CapDetector] Found OBB {targetClass} at {coords}")
-            return coords
+            return (coords, False)  # OBB succeeded
     except Exception as e:
         if debug: print(f"[CapDetector] OBB failed: {e}")
 
     # 2. Fallback Heuristic
     if debug: print(f"[CapDetector] Using heuristic fallback for {locationName}")
-    return _getHeuristicCoordinates(imagePath, locationName)
+    coords = _getHeuristicCoordinates(imagePath, locationName)
+    return (coords, True)  # Fallback was used
 
 def getRotation(imagePath, locationName):
     """

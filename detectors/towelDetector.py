@@ -107,18 +107,22 @@ def _getHeuristicCoordinates(imagePath, locationName):
 # Public Interface
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
-    """Get (x, y) coordinates."""
+    """Get (x, y) coordinates.
+    
+    Returns: tuple of ((x, y), usedFallback) where usedFallback is a bool
+    """
     # 1. Try OBB
     try:
         regions = _getRegions(imagePath)
         targetClass = _getObbClassName(locationName)
         if targetClass in regions:
             region = regions[targetClass]
-            return (int(region.center[0]), int(region.center[1]))
+            return ((int(region.center[0]), int(region.center[1])), False)  # OBB succeeded
     except: pass
     
     # 2. Fallback
-    return _getHeuristicCoordinates(imagePath, locationName)
+    coords = _getHeuristicCoordinates(imagePath, locationName)
+    return (coords, True)  # Fallback was used
 
 def getRotation(imagePath, locationName):
     """

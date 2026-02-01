@@ -222,33 +222,39 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
             coordinatesList = []
             rotationsList = []
             valid = True
+            anyFallbackUsed = False
             
             # Use finalImagePath (processed or original) for detection
             for pos in positions:
                 try:
-                    coords = detector.getCoordinates(finalImagePath, pos, originalLocation=locationName)
+                    result = detector.getCoordinates(finalImagePath, pos, originalLocation=locationName)
+                    # Handle new return format: ((x, y), usedFallback)
+                    if isinstance(result, tuple) and len(result) == 2 and isinstance(result[1], bool):
+                        coords, usedFallback = result
+                    else:
+                        # Legacy format support
+                        coords = result
+                        usedFallback = False
+                    
                     coordinatesList.append(coords)
+                    
+                    if usedFallback:
+                        anyFallbackUsed = True
+                        rLog.fallback(f"OBB not detected for {pos}", "Using heuristic fallback")
+                        batchLogger.logFallback(idx, finalName, 
+                                                f"OBB model did not detect position {pos}",
+                                                "Used heuristic/MediaPipe coordinates")
+                    
                     try:
                         rotation = detector.getRotation(finalImagePath, pos)
                     except:
                         rotation = 0.0
                     rotationsList.append(rotation)
                 except Exception as e:
-                    # This is where model might fail and use fallback
-                    rLog.fallback(f"Model failed for {pos}", "Using heuristic fallback")
-                    batchLogger.logFallback(idx, finalName, 
-                                            f"Model did not predict position {pos}",
-                                            "Used heuristic coordinates")
-                    
-                    # Try to get heuristic coordinates
-                    try:
-                        coords = detector.getCoordinates(finalImagePath, pos, originalLocation=locationName)
-                        coordinatesList.append(coords)
-                        rotationsList.append(0.0)
-                    except:
-                        rLog.error(f"Failed pos {pos}: {e}")
-                        valid = False
-                        break
+                    # Complete failure - can't get coordinates at all
+                    rLog.error(f"Failed pos {pos}: {e}")
+                    valid = False
+                    break
             
             if not valid:
                 errorMsg = "Could not get coordinates for all positions"
