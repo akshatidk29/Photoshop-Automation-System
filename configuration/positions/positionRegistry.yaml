@@ -219,7 +219,7 @@ positions:
 
   CORNER-ANGLED-TOWEL:
     type: BLANKET
-    aliases: ["CORNER-TOWEL", "TOWEL-CORNER", "ANGLED-TOWEL", "TOWEL-ANGLED"]
+    aliases: ["CORNER-TOWEL", "TOWEL-CORNER", "ANGLED-TOWEL", "TOWEL-ANGLED","CORNER-(ANGLED)","CORNER"]
     behavior:
       rotation: fixed_45
       reference: diagonal
@@ -237,7 +237,3 @@ positions:
     behavior:
       rotation: fixed_0
       reference: horizontal
-
-
-
-comboMappings: {}

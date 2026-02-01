@@ -12,11 +12,11 @@ from services.logger import logError
 
 # Import configuration loaders
 try:
-    from configuration.configLoader import (
-        getColorAliases, expandColorVariants, getPositionType,
+    from configuration.configLoader import (expandColorVariants, getPositionType,
         getIgnoreWords, getFrontIndicators, getBackIndicators, 
         getSideIndicators, getAllowedExtensions
     )
+    from detectors.comboParser import parseComboPosition
     CONFIG_AVAILABLE = True
 except ImportError:
     CONFIG_AVAILABLE = False
@@ -38,7 +38,6 @@ else:
 # In-memory image index
 _imageIndex = None
 _indexRoot = None
-_indexByBasename = {}
 _indexEntries = []
 
 
@@ -78,13 +77,48 @@ def getColorVariants(color: str) -> set:
 
 
 def resolvePositionType(location: str) -> str:
-    """Determine if location requires front, back, dual, or side image."""
+    """
+    Determine if location requires front, back, dual, or side image.
+    
+    For multi-position strings like "Back Yoke Full Back", this parses
+    the positions and checks if ANY position requires a back view.
+    """
+    if not location:
+        return "front"
+    
     if CONFIG_AVAILABLE:
+        # Parse the location into individual positions first
+        positions = parseComboPosition(location)
+        
+        if positions:
+            # Check each position's view type
+            hasBack = False
+            hasFront = False
+            hasSide = False
+            
+            for pos in positions:
+                viewType = getPositionType(pos)
+                if viewType == "back":
+                    hasBack = True
+                elif viewType == "side":
+                    hasSide = True
+                elif viewType == "front":
+                    hasFront = True
+            
+            # Priority: back > side > front
+            # If any position requires back view, use back image
+            if hasBack and hasFront:
+                return "dual"
+            elif hasBack:
+                return "back"
+            elif hasSide:
+                return "side"
+            return "front"
+        
+        # Single position - use direct lookup
         return getPositionType(location)
     
     # Fallback to basic detection
-    if not location:
-        return "front"
     loc = location.strip().lower()
     if "full-back" in loc and "full-front" in loc:
         return "dual"
@@ -95,12 +129,11 @@ def resolvePositionType(location: str) -> str:
 
 def _ensureIndex(imageRoot):
     """Build or reuse in-memory index of image files."""
-    global _imageIndex, _indexRoot, _indexByBasename, _indexEntries
+    global _imageIndex, _indexRoot, _indexEntries
     if _imageIndex is not None and _indexRoot == os.path.abspath(imageRoot):
         return
 
     _indexEntries = []
-    _indexByBasename = {}
     rootAbs = os.path.abspath(imageRoot)
     _indexRoot = rootAbs
 
@@ -113,8 +146,6 @@ def _ensureIndex(imageRoot):
                 full = os.path.join(r, f)
                 cleaned = cleanFilename(name)
                 _indexEntries.append({'path': full, 'basename': f, 'cleaned': cleaned})
-                key = f.lower()
-                _indexByBasename.setdefault(key, []).append(full)
         _imageIndex = True
     except Exception as e:
         _imageIndex = None
@@ -216,22 +247,53 @@ def collectMatches(root, pattern):
 
 def classifyImage(imgPath):
     """Classify an image as front, back, or side based on filename."""
-    lname = os.path.basename(imgPath).lower()
+    basename = os.path.basename(imgPath)
+    name = os.path.splitext(basename)[0].lower()
+    
+    # Split filename into words/tokens for matching
+    # Split on non-alphanumeric characters (hyphens, underscores, etc.)
+    tokens = set(re.split(r'[^a-z0-9]+', name))
+    
+    def hasIndicator(indicators):
+        """
+        Check if any indicator matches in the filename.
+        Handles:
+        - Exact token match: "back" in ["bg100", "back", "1200w"]
+        - Token suffix match: "flatback" token ends with "back"
+        - Token contains indicator followed by digit: "flatstraight6" contains "straight"
+        Note: endswith naturally prevents false positives like "black" matching "back"
+              because "black" ends with "ack", not "back"
+        """
+        for indicator in indicators:
+            ind = indicator.lower()
+            # Check if indicator is an exact token
+            if ind in tokens:
+                return True
+            # Check each token for indicator patterns
+            for token in tokens:
+                # Suffix match: token ends with indicator
+                if token.endswith(ind) and token != ind:
+                    return True
+                # Substring match: indicator followed by digits (e.g., "straight6", "left1")
+                # Find indicator in token and check if followed only by digits
+                idx = token.find(ind)
+                if idx != -1 and idx + len(ind) < len(token):
+                    suffix = token[idx + len(ind):]
+                    if suffix.isdigit():
+                        return True
+        return False
     
     # Check back indicators first (more specific)
-    for indicator in BACK_INDICATORS:
-        if indicator in lname:
-            return "back"
+    if hasIndicator(BACK_INDICATORS):
+        return "back"
     
     # Check front indicators
-    for indicator in FRONT_INDICATORS:
-        if indicator in lname:
-            return "front"
+    if hasIndicator(FRONT_INDICATORS):
+        return "front"
     
     # Check side indicators
-    for indicator in SIDE_INDICATORS:
-        if indicator in lname:
-            return "side"
+    if hasIndicator(SIDE_INDICATORS):
+        return "side"
     
     # Check parent folder name for back subfolder
     parentDir = os.path.basename(os.path.dirname(imgPath)).lower()
@@ -285,6 +347,14 @@ def scoreImage(imgPath, color, positionType):
         else:
             positionScore = 0.0  # Side is acceptable for front
     
+    elif positionType == "side":
+        if imageType == "side":
+            positionScore = 2.0  # Strong match
+        elif imageType == "front":
+            positionScore = -2.0  # Penalize front for side position
+        elif imageType == "back":
+            positionScore = -3.0  # HEAVILY penalize back for side
+    
     elif positionType == "dual":
         # Dual positions prefer front, but back is also acceptable
         if imageType == "front":
@@ -301,12 +371,6 @@ def scoreImage(imgPath, color, positionType):
         positionScore -= 0.5
     
     return colorScore + positionScore
-
-
-def findImage(imageRoot, supplierName, partId, color, decorationLocation):
-    """Find single best matching image."""
-    candidates = findImageCandidates(imageRoot, supplierName, partId, color, decorationLocation)
-    return candidates[0] if candidates else None
 
 
 def findImageCandidates(imageRoot, supplierName, partId, color, decorationLocation, maxCandidates=6):
@@ -394,55 +458,3 @@ def findImageCandidates(imageRoot, supplierName, partId, color, decorationLocati
             print(f"[WARNING] No back image found for back position, using: {os.path.basename(candidates[0])}")
     
     return candidates
-
-
-def validateImageFolder(imageRoot):
-    """
-    Validate that the image folder exists and has proper structure.
-    
-    Args:
-        imageRoot: Path to check
-        
-    Returns:
-        Tuple of (isValid, message, details)
-    """
-    if not imageRoot:
-        return False, "No image folder specified", {}
-    
-    if not os.path.exists(imageRoot):
-        return False, f"Folder does not exist: {imageRoot}", {}
-    
-    if not os.path.isdir(imageRoot):
-        return False, f"Path is not a folder: {imageRoot}", {}
-    
-    # Count supplier folders
-    details = {
-        'supplierFolders': 0,
-        'totalImages': 0,
-        'suppliers': []
-    }
-    
-    try:
-        for item in os.listdir(imageRoot):
-            itemPath = os.path.join(imageRoot, item)
-            if os.path.isdir(itemPath):
-                details['supplierFolders'] += 1
-                details['suppliers'].append(item)
-                
-                # Count images in this supplier folder
-                for root, _, files in os.walk(itemPath):
-                    for f in files:
-                        ext = os.path.splitext(f)[1].lower()
-                        if ext in ALLOWED_EXTENSIONS:
-                            details['totalImages'] += 1
-    except Exception as e:
-        return False, f"Error reading folder: {e}", details
-    
-    if details['supplierFolders'] == 0:
-        return False, "No supplier folders found", details
-    
-    if details['totalImages'] == 0:
-        return False, "No image files found", details
-    
-    message = f"Found {details['supplierFolders']} suppliers with {details['totalImages']} images"
-    return True, message, details

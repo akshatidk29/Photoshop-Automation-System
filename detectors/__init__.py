@@ -1,5 +1,4 @@
 # Detectors module initialization
-# from .baseDetector import *
 
 from .garmentDetector import *
 from .capDetector import *

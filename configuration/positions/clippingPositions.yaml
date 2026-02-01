@@ -1,4 +1,4 @@
-clippingEnabled: false
+clippingEnabled: true
 defaultClipping: false
 positions:
   BACK-YOKE: false
@@ -6,7 +6,7 @@ positions:
   CAP-FRONT-SIDE: false
   CAP-SIDE: false
   CORNER-ANGLED-TOWEL: false
-  FRONT (ON BAG): true
+  FRONT (ON BAG): false
   FRONT-CROWN: false
   FRONT_CENTER: false
   FRONT_NAPKIN: false

@@ -15,7 +15,6 @@ import numpy as np
 from typing import List, Tuple, Dict
 from dataclasses import dataclass
 from pathlib import Path
-from functools import lru_cache
 
 try:
     from ultralytics import YOLO

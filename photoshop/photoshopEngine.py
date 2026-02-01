@@ -6,7 +6,7 @@ from services.logger import logError
 import cv2
 import numpy as np
 import tempfile
-from core.utils import computeLogoSize, parseCustomSize
+from core.utils import parseCustomSize
 from PIL import Image
 
 
@@ -429,76 +429,4 @@ def prepareComboPairDoc(imagePath, logoPath, positionsList, coordinatesList, rot
 
     except Exception as e:
         logError(f"prepareComboPairDoc error for {targetName}: {e}")
-        return None
-
-
-def placeLogoInPhotoshop(imagePath, logoPath, locationName, coordinates, psdName, 
-                          outputFolder, garmentType, customLogoSize, decorationCode, targetName):
-    """Place logo on image in Photoshop with proper sizing and positioning."""
-    try:
-        app = win32com.client.Dispatch("Photoshop.Application")
-        app.Visible = True
-        location = str(locationName).strip().upper().replace(" ", "-")
-        canvasSize = 1800 if garmentType == "T-SHIRT" else 1200
-        
-        doc = app.Open(imagePath)
-        doc.ResizeCanvas(1200, canvasSize)
-        
-        try:
-            doc.ResizeImage(doc.Width, doc.Height, 150)
-        except Exception as e:
-            logError(f"Failed to set resolution for {psdName}: {e}")
-        
-        imageLayer = doc.ArtLayers[0]
-        imageLayer.Name = targetName
-
-        logoDoc = app.Open(logoPath)
-        logoLayer = logoDoc.ArtLayers[0]
-        logoDoc.Selection.SelectAll()
-        logoDoc.Selection.Copy()
-        logoDoc.Close(2)
-
-        doc.Paste()
-        pastedLayer = doc.ArtLayers[0]
-        pastedLayer.Name = decorationCode
-
-        originalRulerUnits = app.Preferences.RulerUnits
-        app.Preferences.RulerUnits = 1
-
-        bounds = pastedLayer.Bounds
-        logoWidth = bounds[2] - bounds[0]
-        logoHeight = bounds[3] - bounds[1]
-
-        customSize = parseCustomSize(customLogoSize)
-        if customSize:
-            desiredWidth, desiredHeight = customSize
-        else:
-            desiredWidth, desiredHeight = computeLogoSize(garmentType, logoPath, location)
-
-        if logoWidth == 0 or logoHeight == 0:
-            logError(f"Invalid logo dimensions for {psdName}")
-            return None
-
-        scale = (desiredWidth / logoWidth) * 100
-        pastedLayer.Resize(scale, scale, 5)
-
-        bounds = pastedLayer.Bounds
-        newWidth = bounds[2] - bounds[0]
-        newHeight = bounds[3] - bounds[1]
-
-        x, y = coordinates
-        offsetX = x - (bounds[0] + newWidth / 2)
-        offsetY = y - (bounds[1] + newHeight / 2)
-        pastedLayer.Translate(offsetX, offsetY)
-
-        app.Preferences.RulerUnits = originalRulerUnits
-
-        psdPath = os.path.join(outputFolder, f"{psdName}.psd")
-        options = win32com.client.Dispatch("Photoshop.PhotoshopSaveOptions")
-        doc.SaveAs(psdPath, options, True)
-
-        return doc
-
-    except Exception as e:
-        logError(f"Photoshop error for {psdName}: {e}")
         return None

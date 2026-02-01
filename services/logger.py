@@ -1,33 +1,14 @@
 """
 Logger module for Photoshop Automation.
-Provides user-friendly logging for both console and file output.
+Provides user-friendly console logging.
 """
 
-import os
-import datetime
-from core.config import getLogFile
-from core.utils import cleanFilename, ensureFolder
-
-# Global Log (Summary)
-logPath = getLogFile()
+from core.utils import cleanFilename
 
 
 def logError(message):
-    """Log error message to file and console."""
-    with open(logPath, "a", encoding="utf-8") as f:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"[{timestamp}] [ERROR] {message}\n")
+    """Log error message to console."""
     print(f"[ERROR] {message}")
-
-
-def logInfo(message):
-    """Log info message to console only."""
-    print(f"[INFO] {message}")
-
-
-def logSuccess(message):
-    """Log success message to console."""
-    print(f"[SUCCESS] ✓ {message}")
 
 
 class RowLogger:

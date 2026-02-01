@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
-from core.utils import normalizeLocation
 from configuration.configLoader import (
     getCanonicalName, 
     getPositionBehavior,
@@ -48,15 +47,12 @@ def _getRegions(imagePath):
             _detectionCache[key] = {}
     return _detectionCache[key]
 
-# Location Mapping: Excel Name -> OBB Class Name
-# Now handled via getObbClassName from configLoader
+
 def _getObbClassName(locationName):
     """Get OBB class name for bags from location (uses config)."""
     return getObbClassName(locationName)
 
-# ============================================================================
 # Heuristic Fallback Logic
-# ============================================================================
 
 def _getProductBoundingBox(imagePath):
     """Detect bag bounding box."""
@@ -75,6 +71,8 @@ def _getProductBoundingBox(imagePath):
     
     c = max(contours, key=cv2.contourArea)
     return cv2.boundingRect(c)
+
+
 
 def _segmentBagRegions(imagePath, bagBox):
     """Segment bag into regions (upper, lower, pocket)."""
@@ -133,9 +131,10 @@ def _segmentBagRegions(imagePath, bagBox):
     regions['lower'] = (centerX, by + int(bh * 0.6))
     return regions
 
+
+
 def _getHeuristicCoordinates(imagePath, locationName):
     """Fallback logic."""
-    normLoc = normalizeLocation(locationName)
     try:
         bagBox = _getProductBoundingBox(imagePath)
         bx, by, bw, bh = bagBox
@@ -161,9 +160,8 @@ def _getHeuristicCoordinates(imagePath, locationName):
         
     return (centerX, by + bh // 2)
 
-# ============================================================================
+
 # Public Interface
-# ============================================================================
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """Get (x, y) coordinates for placement (OBB -> Heuristic)."""
@@ -199,9 +197,3 @@ def getRotation(imagePath, locationName):
         pass
     
     return 0.0
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """
-    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
-    """
-    return baseSize

@@ -3,9 +3,7 @@ Configuration Loader Module
 Loads and manages YAML configuration files for the automation system.
 """
 
-import os
 import yaml
-import re
 from pathlib import Path
 
 # Configuration directory path
@@ -50,15 +48,7 @@ def _saveYaml(filename, data):
         return False
 
 
-def clearConfigCache():
-    """Clear the configuration cache to force reload."""
-    global _configCache
-    _configCache = {}
-
-
-# ============================================================================
-# Position Registry (Master Configuration)
-# ============================================================================
+# Position Registry
 
 def getPositionRegistry():
     """Get the master position registry configuration."""
@@ -241,21 +231,6 @@ def getPositionBehavior(positionName):
     return data.get('behavior', {})
 
 
-def getComboMappings():
-    """Get the dictionary of combo position mappings."""
-    registry = getPositionRegistry()
-    return registry.get('comboMappings', {})
-
-
-def isComboPosition(positionName):
-    """Check if a position is a combo/dual position."""
-    combos = getComboMappings()
-    # Normalize input first
-    cleanInput = str(positionName).strip().upper().replace(" ", "-").replace("&", "-")
-    cleanInput = "-".join(filter(None, cleanInput.split("-")))
-    return cleanInput in combos
-
-
 def validatePosition(positionName):
     """
     Check if a position is valid (either canonical, alias, or combo).
@@ -274,9 +249,7 @@ def validatePosition(positionName):
     return False, canonical
 
 
-# ============================================================================
 # Column Mapping Functions
-# ============================================================================
 
 def getColumnMapping():
     """Get the column mapping configuration."""
@@ -316,38 +289,12 @@ def findColumnName(dfColumns, internalName):
     return None
 
 
-def normalizeRowData(row, dfColumns):
-    """Convert a DataFrame row to a normalized dictionary."""
-    mapping = getColumnMapping()
-    columns = mapping.get('columns', {})
-    normalized = {}
-    
-    for internalName, variations in columns.items():
-        for variation in variations:
-            if variation in dfColumns:
-                value = row.get(variation)
-                if value is not None:
-                    # Handle NaN
-                    if isinstance(value, float) and value != value:
-                        sVal = ""
-                    else:
-                        sVal = str(value).strip()
-                    normalized[internalName] = sVal
-                break
-    return normalized
 
-
-# ============================================================================
 # Color Alias Functions
-# ============================================================================
 
 def getColorAliasesConfig():
     """Get color alias configuration."""
     return _loadYaml('colors/colorAliases.yaml')
-
-def getColorAliases():
-    """Get the dictionary of color aliases."""
-    return getColorAliasesConfig().get('aliases', {})
 
 def expandColorVariants(colorName):
     """
@@ -385,20 +332,14 @@ def expandColorVariants(colorName):
     
     return variants
 
-# ============================================================================
 # Logo Size Functions
-# ============================================================================
 
 def getPositionType(positionName):
     """
-    Return 'front', 'back', 'dual', or 'side' for a position.
+    Return 'front', 'back' or 'side' for a position.
     Used by imageLocator.
     """
-    # 1. Check if it's a combo (Dual/Multi)
-    if isComboPosition(positionName):
-        return 'dual'
-    
-    # 2. Check registry for explicit 'view' type
+    # 1. Check registry for explicit 'view' type
     data = getPositionData(positionName)
     if data and 'view' in data:
         return data['view']
@@ -431,9 +372,7 @@ def getDefaultLogoSize(position):
     return defaultSize
 
 
-# ============================================================================
 # Constants & Helpers
-# ============================================================================
 
 def getIgnoreWords():
     return _loadYaml('images/filenamePatterns.yaml').get('ignoreWords', [])
@@ -451,9 +390,7 @@ def getAllowedExtensions():
     return ['.' + e.lstrip('.') for e in _loadYaml('images/filenamePatterns.yaml').get('allowedExtensions', ['jpg','png'])]
 
 
-# ============================================================================
 # GUI / Advanced Settings Helpers
-# ============================================================================
 
 def getAllLogoSizes():
     """Get all configured logo sizes for the GUI."""

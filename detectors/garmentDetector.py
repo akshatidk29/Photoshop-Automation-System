@@ -11,7 +11,6 @@ import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
 from configuration.configLoader import (
-    getCanonicalName, 
     getPositionBehavior,
     getObbClassName
 )
@@ -58,13 +57,8 @@ def _getObbClassName(locationName):
     """Get OBB class name for garments from location (uses config)."""
     return getObbClassName(locationName)
 
-def _normalizeLocation(locationName):
-    """Normalize location name."""
-    return getCanonicalName(locationName)
 
-# ============================================================================
 # MediaPipe Pose Fallback
-# ============================================================================
 
 def _getMediaPipePose():
     """Get or create MediaPipe Pose instance."""
@@ -165,7 +159,6 @@ def _getCoordinatesFromLandmarks(landmarks, locationName, imgW, imgH):
     rElbow = landmarks.get('right_elbow')
     lWrist = landmarks.get('left_wrist')
     rWrist = landmarks.get('right_wrist')
-    nose = landmarks.get('nose')
     
     # Safety check
     if not lShoulder or not rShoulder:
@@ -386,9 +379,7 @@ def _getHeuristicCoordinates(imagePath, locationName):
     
     return (x, y)
 
-# ============================================================================
 # Public Interface
-# ============================================================================
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """
@@ -451,10 +442,3 @@ def getRotation(imagePath, locationName):
         pass
     
     return 0.0
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """
-    DEPRECATED: Logo sizing logic is now handled in core/utils.py via computeLogoSize.
-    This function is kept for interface compatibility but returns standard fallback.
-    """
-    return (99, 99)

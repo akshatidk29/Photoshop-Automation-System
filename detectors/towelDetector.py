@@ -8,9 +8,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 from detectors.inference import InferenceEngine
-from core.utils import normalizeLocation
 from configuration.configLoader import (
-    getCanonicalName, 
     getPositionBehavior,
     getObbClassName
 )
@@ -74,31 +72,18 @@ def _getRegions(imagePath):
     return _detectionCache[key]
 
 def _getObbClassName(locationName):
-    """Get OBB class name for towels from location."""
-    canonical = getCanonicalName(locationName)
-    
-    # Context-aware mapping:
-    if canonical == "CORNER-ANGLED-TOWEL": return "CORNER"
-    if canonical == "FRONT_CENTER": return "CENTER"
-    if canonical == "FULL-FRONT": return "CENTER" # "CENTER" is the default for towels
-    if canonical == "FRONT": return "CENTER"
-    
-    # Fallback to normalized name with underscores
-    return canonical.replace("-", "_").replace(" ", "_")
+    """Get OBB class name for towels from location (uses config)."""
+    return getObbClassName(locationName)
 
 def _getConfigForLocation(locationName):
-    """Get heuristic config."""
-    norm = getCanonicalName(locationName)
-    if "CORNER" in norm: return TOWEL_CONFIG["CORNER"]
-    if "CENTER" in norm or "FRONT" in norm: return TOWEL_CONFIG["CENTER"]
-    # Add check for specific canonical names
-    if norm == "FRONT_CENTER": return TOWEL_CONFIG["CENTER"]
+    """Get heuristic config based on OBB class name."""
+    obbClass = _getObbClassName(locationName)
+    if "CORNER" in obbClass: return TOWEL_CONFIG["CORNER"]
+    if "CENTER" in obbClass or "FRONT" in obbClass: return TOWEL_CONFIG["CENTER"]
     
     return TOWEL_CONFIG["DEFAULT"]
 
-# ============================================================================
 # Heuristic Fallback Logic
-# ============================================================================
 
 def _getProductBoundingBox(imagePath):
     img = cv2.imread(imagePath)
@@ -127,9 +112,7 @@ def _getHeuristicCoordinates(imagePath, locationName):
     finalY = by + int(bh * config["yPercent"])
     return finalX, finalY
 
-# ============================================================================
 # Public Interface
-# ============================================================================
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """Get (x, y) coordinates."""
@@ -148,31 +131,27 @@ def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
 def getRotation(imagePath, locationName):
     """
     Get rotation angle (degrees).
-    Uses behavior flags from registry.
+    Priority: OBB Model Detection > Behavior Flags > Heuristic Fallback
     """
+    # 1. FIRST: Try OBB model detection (most accurate)
+    try:
+        regions = _getRegions(imagePath)
+        targetClass = _getObbClassName(locationName)
+        if targetClass in regions:
+            # Model detected the region - use its angle
+            return -regions[targetClass].angle
+    except: 
+        pass
+    
+    # 2. SECOND: Fall back to behavior flags (from registry)
     behavior = getPositionBehavior(locationName)
     rotationMode = behavior.get('rotation', 'standard')
     
     if rotationMode == 'fixed_0':
         return 0.0
     if rotationMode == 'fixed_45':
-        return -45.0 # Check sign: usually negative for CCW? Or positive?
-        # Detectors use negative angle from OBB. If standard is -45, this should be -45.
-        
-    try:
-        regions = _getRegions(imagePath)
-        targetClass = _getObbClassName(locationName)
-        if targetClass in regions:
-            return -regions[targetClass].angle
-    except: 
-        pass
+        return -45.0
     
-    # Fallback to heuristic config (legacy support)
+    # 3. THIRD: Fallback to heuristic config (legacy support)
     config = _getConfigForLocation(locationName)
     return config["rotation"]
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """
-    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
-    """
-    return (99, 99)

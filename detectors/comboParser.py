@@ -7,18 +7,8 @@ Uses positionRegistry.yaml for configuration.
 import re
 from configuration.configLoader import (
     getCanonicalName,
-    getComboMappings,
-    isComboPosition as isComboPositionCheck,
     getPositionRegistry
 )
-
-def _getComboMappings():
-    """Get combo position mappings."""
-    return getComboMappings()
-
-def isComboPosition(locationName):
-    """Check if a position is a combo position (requires multiple logos)."""
-    return isComboPositionCheck(locationName)
 
 
 def _getAllKnownPositionPatterns():
@@ -79,26 +69,29 @@ def _tryExtractMultiplePositions(locationName):
     if not allMatches:
         return None
     
-    # Use interval scheduling algorithm to maximize number of non-overlapping matches
-    # Sort by END position (greedy interval scheduling for maximum count)
-    allMatches.sort(key=lambda x: x[1])
+    # Use weighted interval scheduling to prefer LONGER matches when overlapping
+    # This prevents "BACK YOKE" from being split into "BACK" + "YOKE"
+    # 
+    # Algorithm:
+    # 1. Sort by start position, then by length descending (longest first for same start)
+    # 2. Greedily select non-overlapping matches, preferring longer ones
+    allMatches.sort(key=lambda x: (x[0], -(x[1] - x[0])))  # Sort by start, then by length descending
     
     selectedMatches = []
     lastEnd = -1
     
     for startIdx, endIdx, canonical, pattern in allMatches:
-        # If this interval doesn't overlap with the last selected one
+        # If this interval doesn't overlap with any selected one
         if startIdx >= lastEnd:
-            selectedMatches.append((startIdx, canonical))
+            selectedMatches.append((startIdx, endIdx, canonical))
             lastEnd = endIdx
     
-    # Sort by position in original string to preserve input order
-    selectedMatches.sort(key=lambda x: x[0])
+    # Already sorted by start position
     
     # Extract canonical names, removing duplicates while preserving order
     found = []
     seen = set()
-    for _, canonical in selectedMatches:
+    for _, _, canonical in selectedMatches:
         if canonical not in seen:
             found.append(canonical)
             seen.add(canonical)
@@ -141,18 +134,7 @@ def parseComboPosition(locationName):
     
     # 3. Get canonical form for single position fallback
     canonical = getCanonicalName(locationName)
-    
-    # 4. Check if canonical form is a known combo in the registry (legacy support)
-    combos = getComboMappings()
-    if canonical in combos:
-        return list(combos[canonical])
-    
-    # 5. If nothing else worked, it's a single position
-    return [canonical]
-    return [canonical]
 
-def getPositionCount(locationName):
-    """Get the number of logo placements needed for a position."""
-    return len(parseComboPosition(locationName))
-
+    # 4. If nothing else worked, it's a single position
+    return [canonical]
 

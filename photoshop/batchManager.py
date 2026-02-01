@@ -2,7 +2,6 @@ import os
 import win32com.client
 import pythoncom
 from services.logger import logError
-from core.config import PSD_OUTPUT_DIR, IMAGE_OUTPUT_DIR
 from .photoshopEngine import preparePairDoc, prepareComboPairDoc
 
 
@@ -21,12 +20,8 @@ class PhotoshopBatchManager:
         self.outputDir = outputDir
         
         # Determine paths based on provided outputDir or defaults
-        if self.outputDir:
-            self.psdOutputDir = os.path.join(self.outputDir, "photoshop")
-            self.imageOutputDir = os.path.join(self.outputDir) # Images go directly or in folders inside here
-        else:
-            self.psdOutputDir = PSD_OUTPUT_DIR
-            self.imageOutputDir = IMAGE_OUTPUT_DIR
+        self.psdOutputDir = os.path.join(self.outputDir, "photoshop")
+        self.imageOutputDir = os.path.join(self.outputDir) # Images go directly or in folders inside here
             
         print("PhotoshopBatchManager initialized.")
 

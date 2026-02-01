@@ -10,7 +10,6 @@ from pathlib import Path
 from detectors.inference import InferenceEngine
 from core.utils import normalizeLocation
 from configuration.configLoader import (
-    getCanonicalName, 
     getPositionBehavior,
     getObbClassName
 )
@@ -51,15 +50,11 @@ def _getRegions(imagePath):
         
     return _detectionCache[key]
 
-# Location Mapping: Excel Name -> OBB Class Name
-# Now handled via getObbClassName from configLoader
 def _getObbClassName(locationName):
     """Get OBB class name for caps from location (uses config)."""
     return getObbClassName(locationName)
 
-# ============================================================================
 # Heuristic Fallback Logic
-# ============================================================================
 
 def _getProductBoundingBox(image, offsetX=0, offsetY=0):
     """Detect largest object in image using contours."""
@@ -128,9 +123,7 @@ def _getHeuristicCoordinates(imagePath, locationName):
 
     return centerX, centerY
 
-# ============================================================================
 # Public Interface
-# ============================================================================
 
 def getCoordinates(imagePath, locationName, originalLocation=None, debug=False):
     """Get (x, y) coordinates for placement (OBB -> Heuristic)."""
@@ -173,9 +166,3 @@ def getRotation(imagePath, locationName):
         pass
     
     return 0.0
-
-def getLogoScale(imagePath, locationName, baseSize=(200, 100)):
-    """
-    DEPRECATED: Logo sizing is handled by core/utils.computeLogoSize.
-    """
-    return (99, 99)
