@@ -40,7 +40,7 @@ positions:
 
   LEFT-CHEST:
     type: T-SHIRT
-    aliases: ["L-CHEST", "CHEST-LEFT", "LC", "LFT-CHEST", "LFT CHEST", "LEFT CHEST"]
+    aliases: ["L-CHEST", "CHEST-LEFT", "LC", "LFT-CHEST", "LFT CHEST", "LEFT CHEST", "POCKET (ABOVE)"]
     behavior:
       rotation: standard
       reference: vertical
