@@ -47,7 +47,7 @@ def convert_models():
             from ultralytics import YOLO
             
             # Load the model
-            model = YOLO(str(pt_file))
+            model = YOLO(str(pt_file), task="obb")
             
             # Export to ONNX
             # Using opset=12 for better compatibility
