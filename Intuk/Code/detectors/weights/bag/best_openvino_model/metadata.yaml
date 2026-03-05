@@ -1,0 +1,25 @@
+description: Ultralytics YOLO26l-obb model trained on /DATA/idk/photoshopAutomation/model/dataset/data.yaml
+author: Ultralytics
+date: '2026-02-19T15:34:10.560065'
+version: 8.4.9
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: obb
+batch: 1
+imgsz:
+- 1024
+- 1024
+names:
+  0: FRONT_ON_BAG
+  1: ON_POCKET_ON_BAG
+  2: FRONT_CENTER
+args:
+  batch: 1
+  fraction: 1.0
+  half: false
+  int8: false
+  dynamic: false
+  nms: false
+channels: 3
+end2end: true

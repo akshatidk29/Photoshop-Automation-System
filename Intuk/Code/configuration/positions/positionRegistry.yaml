@@ -1,0 +1,169 @@
+# Position Registry
+
+# Master configuration for all artwork placement positions
+
+# This file defines:
+#   1. All valid position names
+#   2. Aliases/Variations mapping to position names
+#   3. Garment Type (T-SHIRT, CAP, BAG, BLANKET)
+#   4. View type (front, back)
+
+# SCHEMA:
+#   POSITION-NAME:
+#     type: [T-SHIRT, CAP, BAG, BLANKET]
+#     view: [front, back]           # Optional, defaults to 'front'
+#     obbClass: STRING              # Optional, OBB model class name
+#     aliases: [LIST OF VARIATIONS]
+
+
+# Global settings
+settings:
+  # Rotation threshold in degrees - angles below this won't rotate the logo
+  rotation_threshold: 10
+
+
+positions:
+
+  # GARMENT POSITIONS
+
+  FULL-FRONT:
+    type: T-SHIRT
+    view: front
+    aliases: ["FRONT", "CENTER-FRONT", "CHEST-CENTER", "FULL FRONT", "FF"]
+
+  FULL-BACK:
+    type: T-SHIRT
+    view: back
+    aliases: ["BACK", "CENTER-BACK", "FULL BACK", "FB"]
+
+  LEFT-CHEST:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-CHEST", "CHEST-LEFT", "LC", "LFT-CHEST", "LFT CHEST", "LEFT CHEST", "POCKET (ABOVE)"]
+
+  RIGHT-CHEST:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-CHEST", "CHEST-RIGHT", "RC", "RGT-CHEST", "RGT CHEST", "RIGHT CHEST"]
+
+  LEFT-BICEP:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-BICEP", "BICEP-LEFT", "LB", "LEFT BICEP", "LFT-BICEP", "LFT BICEP"]
+
+  RIGHT-BICEP:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-BICEP", "BICEP-RIGHT", "RB", "RIGHT BICEP", "RGT-BICEP", "RGT BICEP"]
+
+  LEFT-SLEEVE:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-SLEEVE", "SLEEVE-LEFT", "LS", "LEFT SLEEVE", "LFT-SLEEVE", "LFT SLEEVE"]
+
+  RIGHT-SLEEVE:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-SLEEVE", "SLEEVE-RIGHT", "RS", "RIGHT SLEEVE", "RGT-SLEEVE", "RGT SLEEVE"]
+
+  LEFT-COLLAR:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-COLLAR", "COLLAR-LEFT", "LFT-COLLAR"]
+
+  RIGHT-COLLAR:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-COLLAR", "COLLAR-RIGHT", "RGT-COLLAR"]
+
+  LEFT-CUFF:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-CUFF", "CUFF-LEFT", "LFT-CUFF", "LEFT-CUFF-(ABOVE)", "LEFT CUFF (ABOVE)", "L-CUFF-(ABOVE)"]
+
+  RIGHT-CUFF:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-CUFF", "CUFF-RIGHT", "RGT-CUFF", "RIGHT-CUFF-(ABOVE)", "RIGHT CUFF (ABOVE)", "R-CUFF-(ABOVE)"]
+
+  LEFT-HIP:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-HIP", "HIP-LEFT", "LFT-HIP"]
+
+  RIGHT-HIP:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-HIP", "HIP-RIGHT", "RGT-HIP"]
+
+  BACK-YOKE:
+    type: T-SHIRT
+    view: back
+    aliases: ["YOKE", "BACK-NECK", "NECK-BACK", "NAP", "BACK-COLLAR"]
+      
+  ON-POCKET:
+    type: T-SHIRT
+    view: front
+    aliases: ["POCKET", "CHEST-POCKET"]
+
+  LEFT-THIGH-HIGH:
+    type: T-SHIRT
+    view: front
+    aliases: ["L-THIGH", "THIGH-LEFT"]
+
+  RIGHT-THIGH-HIGH:
+    type: T-SHIRT
+    view: front
+    aliases: ["R-THIGH", "THIGH-RIGHT"]
+
+  # CAP POSITIONS
+
+  FRONT-CROWN:
+    type: CAP
+    obbClass: CAP_FRONT
+    aliases: ["CAP-FRONT", "CAP-FRONT-CROWN", "HAT-FRONT", "FRONT-OF-BEANIE"]
+
+  CAP-BACK:
+    type: CAP
+    view: back
+    aliases: ["HAT-BACK", "BACK-OF-CAP", "BACK-OF-BEANIE"]
+
+  CAP-SIDE:
+    type: CAP
+    view: back
+    aliases: ["HAT-SIDE"]
+
+  LOWER-LEFT-CROWN:
+    type: CAP
+    aliases: ["LLC", "CAP-LLC"]
+
+  LOWER-RIGHT-CROWN:
+    type: CAP
+    aliases: ["LRC", "CAP-LRC"]
+
+  # BAG POSITIONS
+
+  "FRONT (ON BAG)":
+    type: BAG
+    obbClass: FRONT_ON_BAG
+    aliases: ["BAG-FRONT", "FRONT-POCKET", "BAG-FRONT-SIDE", "FRONT-ON-BAG", "FRONT-BAG", "FRONT-OF-BAG", "BAG"]
+
+  "ON POCKET (ON BAG)":
+    type: BAG
+    obbClass: ON_POCKET_ON_BAG
+    aliases: ["BAG-POCKET", "POCKET-ON-BAG", "ON-POCKET-ON-BAG", "ON-POCKET-BAG", "BAG-ON-POCKET","ON-BAG-POCKET"]
+
+  FRONT_CENTER:
+    type: BAG
+    obbClass: FRONT_CENTER
+    aliases: ["FRONT-CENTER", "CENTER-FRONT", "CENTER"]
+
+  # TOWEL
+
+  CORNER-ANGLED-TOWEL:
+    type: BLANKET
+    aliases: ["CORNER-TOWEL", "TOWEL-CORNER", "ANGLED-TOWEL", "TOWEL-ANGLED","CORNER-(ANGLED)","CORNER"]
+
+  FRONT_NAPKIN:
+    type: BLANKET
+    aliases: ["FRONT-NAPKIN", "NAPKIN-FRONT", "NAPKIN"]

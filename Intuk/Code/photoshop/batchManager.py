@@ -1,0 +1,379 @@
+import os
+import re
+import win32com.client
+import pythoncom
+from services.batchLogger import logError
+from .photoshopEngine import preparePairDoc, prepareComboPairDoc
+
+
+class PhotoshopBatchManager:
+    """Manages batch processing of images in Photoshop."""
+    
+    def __init__(self, outputDir=None, maxItemsPerBatch=100):
+        print("Initializing PhotoshopBatchManager...")
+        pythoncom.CoInitialize()
+        self.app = win32com.client.Dispatch("Photoshop.Application")
+        self.app.Visible = True
+        self.batchIndex = 1
+        self.itemsInBatch = 0
+        self.batchDoc = None
+        self.maxItems = maxItemsPerBatch
+        self.outputDir = outputDir
+        
+        # Determine paths based on provided outputDir or defaults
+        self.psdOutputDir = os.path.join(self.outputDir, "photoshop")
+        self.imageOutputDir = os.path.join(self.outputDir) # Images go directly or in folders inside here
+            
+        print("PhotoshopBatchManager initialized.")
+
+    def _saveAndCloseBatch(self):
+        """Save and close current batch document."""
+        if not self.batchDoc:
+            return
+        try:
+            os.makedirs(self.psdOutputDir, exist_ok=True)
+            batchName = f"Batch_{self.batchIndex}.psd"
+            psdPath = os.path.join(self.psdOutputDir, batchName)
+            options = win32com.client.Dispatch("Photoshop.PhotoshopSaveOptions")
+            self.batchDoc.SaveAs(psdPath, options, True)
+            try:
+                self.batchDoc.Close(2)
+            except Exception:
+                pass
+            print(f"[BATCH] Saved and closed: {batchName}")
+        except Exception as e:
+            logError(f"Failed to save/close batch {self.batchIndex}: {e}")
+        finally:
+            self.batchDoc = None
+
+    def finalize(self):
+        """Finalize any remaining batch items."""
+        if self.batchDoc and self.itemsInBatch > 0:
+            self._saveAndCloseBatch()
+
+    def _runSaveForWebJs(self, exportPath):
+        """Run ExtendScript for Save For Web export."""
+        jsPath = exportPath.replace("\\", "\\\\").replace('"', '\\"')
+
+        jsx = f'''
+        try {{
+            var file = new File("{jsPath}");
+            var opts = new ExportOptionsSaveForWeb();
+            opts.format = SaveDocumentType.JPEG;
+            opts.includeProfile = false;
+            opts.optimized = true;
+            opts.interlaced = false;
+            opts.quality = 60;
+            app.activeDocument.exportDocument(file, ExportType.SAVEFORWEB, opts);
+            "OK";
+        }} catch(e) {{
+            throw(e);
+        }}
+        '''
+        try:
+            result = self.app.DoJavaScript(jsx)
+            return True
+        except Exception as e:
+            logError(f"DoJavaScript SaveForWeb failed for path {exportPath}: {e}")
+            return False
+
+    def addCombo(self, partId, imagePath, logoPathsList, targetName, decorationCode,
+                 positionsList, coordinatesList, rotationsList, garmentType, customLogoSize, 
+                 finalName, canvasHeight=1200, clippingEnabled=False, clippingPositions=None):
+        """Add image with multiple logos at different positions."""
+        
+        # Backward compatibility: Convert single string to list
+        if isinstance(logoPathsList, str):
+            logoPathsList = [logoPathsList]
+        
+        if not coordinatesList or None in coordinatesList:
+            logError(f"Skipping combo because some coordinates missing for {targetName}")
+            return False
+        
+        # Pass clipping settings and logo list to the engine
+        tempDoc = prepareComboPairDoc(
+            imagePath, logoPathsList, positionsList, coordinatesList, rotationsList,
+            garmentType, customLogoSize, decorationCode, targetName, canvasHeight,
+            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
+        )
+        if tempDoc is None:
+            logError(f"prepareComboPairDoc failed for {targetName}")
+            return False
+
+        try:
+            canvasWidth = 1200
+            canvasFolder = f"{canvasWidth} x {canvasHeight}"
+
+            forPrintingDir = os.path.join(self.imageOutputDir, canvasFolder)
+            os.makedirs(forPrintingDir, exist_ok=True)
+
+            # Sanitize finalName - remove chars that are invalid in Windows filenames
+            jpgFilename = re.sub(r'[\\/:*?"<>|]', '_', finalName)
+            jpgFilename = jpgFilename.replace('.jpg', '') if jpgFilename.endswith('.jpg') else jpgFilename
+            jpgPath = os.path.join(forPrintingDir, f"{jpgFilename}.jpg")
+
+            exportDoc = tempDoc.Duplicate()
+            self.app.ActiveDocument = exportDoc
+
+            try:
+                exportDoc.Flatten()
+            except Exception:
+                pass
+
+            ok = self._runSaveForWebJs(jpgPath)
+            if not ok:
+                try:
+                    jpgOptions = win32com.client.Dispatch("Photoshop.JPEGSaveOptions")
+                    jpgOptions.Quality = 6
+                    exportDoc.SaveAs(jpgPath, jpgOptions, True)
+                except Exception as e:
+                    logError(f"Fallback SaveAs JPG failed for {jpgPath}: {e}")
+
+            try:
+                exportDoc.Close(2)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logError(f"Failed to export combo JPG for {finalName}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Add layers to batch PSD
+        try:
+            if self.batchDoc is None:
+                width = float(tempDoc.Width)
+                height = float(tempDoc.Height)
+                res = float(getattr(tempDoc, 'Resolution', 150))
+                name = f"Batch_{self.batchIndex}"
+                self.batchDoc = self.app.Documents.Add(width, height, res, name)
+                self.itemsInBatch = 0
+
+            self.app.ActiveDocument = self.batchDoc
+            layerSets = self.batchDoc.LayerSets
+            targetSet = None
+            for i in range(1, layerSets.Count + 1):
+                try:
+                    s = layerSets[i-1]
+                    if s.Name == str(partId):
+                        targetSet = s
+                        break
+                except Exception:
+                    continue
+            if targetSet is None:
+                targetSet = layerSets.Add()
+                targetSet.Name = str(partId)
+
+            self.app.ActiveDocument = tempDoc
+            layers = tempDoc.ArtLayers
+            for i in range(layers.Count - 1, -1, -1):
+                try:
+                    layer = layers[i]
+                    layer.Duplicate(targetSet)
+                except Exception:
+                    pass
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logError(f"Failed to add combo layers to batch for {partId}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+
+        self.itemsInBatch += 1
+
+        if self.itemsInBatch >= self.maxItems:
+            try:
+                self._saveAndCloseBatch()
+            except Exception as e:
+                logError(f"Failed to finalize batch {self.batchIndex}: {e}")
+            self.batchIndex += 1
+            self.itemsInBatch = 0
+
+        return True
+
+    def addPair(self, partId, imagePath, logoPath, targetName, decorationCode, 
+                locationName, coordinates, rotation, garmentType, customLogoSize, 
+                finalName, canvasHeight=1200, clippingEnabled=False, clippingPositions=None):
+        """Add image-logo pair to batch."""
+        
+        if coordinates is None:
+            logError(f"Skipping pair because coordinates missing for {targetName}")
+            return False
+
+        # Pass clipping settings to the engine
+        tempDoc = preparePairDoc(
+            imagePath, logoPath, locationName, coordinates, rotation,
+            garmentType, customLogoSize, decorationCode, targetName, canvasHeight,
+            clippingEnabled=clippingEnabled, clippingPositions=clippingPositions
+        )
+        if tempDoc is None:
+            logError(f"preparePairDoc failed for {targetName}")
+            return False
+
+        # Find layers
+        try:
+            layers = tempDoc.ArtLayers
+            imageLayer = None
+            logoLayer = None
+            for i in range(1, layers.Count + 1):
+                l = layers[i-1]
+                name = getattr(l, 'Name', '')
+                if name == targetName and imageLayer is None:
+                    imageLayer = l
+                if name == decorationCode and logoLayer is None:
+                    logoLayer = l
+            if imageLayer is None:
+                try:
+                    imageLayer = layers[layers.Count-1]
+                except Exception:
+                    imageLayer = None
+            if logoLayer is None:
+                try:
+                    logoLayer = layers[0]
+                except Exception:
+                    logoLayer = None
+        except Exception as e:
+            logError(f"Failed to read layers from temp doc for {targetName}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Export the merged image as JPG
+        try:
+            canvasWidth = 1200
+            canvasFolder = f"{canvasWidth} x {canvasHeight}"
+
+            forPrintingDir = os.path.join(self.imageOutputDir, canvasFolder)
+            os.makedirs(forPrintingDir, exist_ok=True)
+
+            # Sanitize finalName - remove chars that are invalid in Windows filenames
+            jpgFilename = re.sub(r'[\\/:*?"<>|]', '_', finalName)
+            jpgFilename = jpgFilename.replace('.jpg', '') if jpgFilename.endswith('.jpg') else jpgFilename
+            jpgPath = os.path.join(forPrintingDir, f"{jpgFilename}.jpg")
+
+            exportDoc = tempDoc.Duplicate()
+            self.app.ActiveDocument = exportDoc
+
+            try:
+                exportDoc.Flatten()
+            except Exception:
+                pass
+
+            ok = self._runSaveForWebJs(jpgPath)
+            if not ok:
+                try:
+                    jpgOptions = win32com.client.Dispatch("Photoshop.JPEGSaveOptions")
+                    jpgOptions.Quality = 6
+                    exportDoc.SaveAs(jpgPath, jpgOptions, True)
+                except Exception as e:
+                    logError(f"Fallback SaveAs JPG failed for {jpgPath}: {e}")
+
+            try:
+                exportDoc.Close(2)
+            except Exception:
+                pass
+
+        except Exception as e:
+            logError(f"Failed to export JPG for {finalName}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Ensure batch doc exists
+        try:
+            if self.batchDoc is None:
+                width = float(tempDoc.Width)
+                height = float(tempDoc.Height)
+                res = float(getattr(tempDoc, 'Resolution', 150))
+                name = f"Batch_{self.batchIndex}"
+                self.batchDoc = self.app.Documents.Add(width, height, res, name)
+                self.itemsInBatch = 0
+        except Exception as e:
+            logError(f"Failed to create batch doc: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Ensure group exists for the product id
+        try:
+            self.app.ActiveDocument = self.batchDoc
+            layerSets = self.batchDoc.LayerSets
+            targetSet = None
+            for i in range(1, layerSets.Count + 1):
+                try:
+                    s = layerSets[i-1]
+                    if s.Name == str(partId):
+                        targetSet = s
+                        break
+                except Exception:
+                    continue
+            if targetSet is None:
+                targetSet = layerSets.Add()
+                targetSet.Name = str(partId)
+        except Exception as e:
+            logError(f"Failed to create/get LayerSet for {partId}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Duplicate layers into group
+        try:
+            self.app.ActiveDocument = tempDoc
+            if imageLayer is not None:
+                imageLayer.Duplicate(targetSet)
+            if logoLayer is not None:
+                logoLayer.Duplicate(targetSet)
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+        except Exception as e:
+            logError(f"Failed to duplicate layers into group for {partId}: {e}")
+            try:
+                tempDoc.Close(2)
+            except Exception:
+                pass
+            return False
+
+        # Rename layers if possible
+        try:
+            self.app.ActiveDocument = self.batchDoc
+            groupLayers = targetSet.ArtLayers
+            try:
+                if groupLayers.Count >= 2:
+                    groupLayers[0].Name = decorationCode
+                    groupLayers[1].Name = targetName
+                elif groupLayers.Count == 1:
+                    groupLayers[0].Name = targetName
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        self.itemsInBatch += 1
+
+        if self.itemsInBatch >= self.maxItems:
+            try:
+                self._saveAndCloseBatch()
+            except Exception as e:
+                logError(f"Failed to finalize batch {self.batchIndex}: {e}")
+            self.batchIndex += 1
+            self.itemsInBatch = 0
+
+        return True

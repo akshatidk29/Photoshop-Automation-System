@@ -1,0 +1,40 @@
+# Image Layout Settings
+
+# DUAL VIEW IMAGE SETTINGS
+dualView:
+
+  # T-SHIRT DUAL VIEW
+  tshirt:
+    canvasWidth: 1200
+    canvasHeight: 1800
+    
+    # Scale percentages
+    backScalePercent: 0.70    
+    frontScalePercent: 0.80   
+    
+    # Edge margin
+    edgeMargin: 10
+  
+  # CAP DUAL VIEW
+  cap:
+    canvasWidth: 1200
+    canvasHeight: 1200
+    
+    # Scale percentage for both images
+    scalePercent: 0.80
+    
+    # Edge margin
+    edgeMargin: 10
+
+
+# BACKGROUND REMOVAL SETTINGS
+backgroundRemoval:
+  alphaMatting: true
+  alphaMattingForegroundThreshold: 240
+  alphaMattingBackgroundThreshold: 20
+  alphaMattingErodeSize: 10
+
+
+# OUTPUT SETTINGS
+output:
+  jpegQuality: 95

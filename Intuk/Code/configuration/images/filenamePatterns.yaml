@@ -1,0 +1,45 @@
+# Filename Pattern Configuration
+
+
+# Indicators that an image is a FRONT view
+frontIndicators:
+  - front
+  - fullfront
+  - flatfront
+  - modelfront
+  - front1
+  - front2
+  - front3
+  - straight
+  - hatstraight
+
+# Indicators that an image is a BACK view
+backIndicators:
+  - back
+  - fullback
+  - flatback
+  - modelback
+  - rear
+  - back1
+  - back2
+  - back3
+  - back4
+
+# Indicators that an image is a SIDE view
+sideIndicators:
+  - side
+  - profile
+  - left
+  - right
+  - left1
+  - left2
+  - right1
+  - right2
+  - flatleft
+  - flatright
+
+# File extensions to include
+allowedExtensions:
+  - jpg
+  - jpeg
+  - png

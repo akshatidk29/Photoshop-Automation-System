@@ -1,0 +1,27 @@
+# Core dependencies
+pandas
+openpyxl
+opencv-python
+pywin32
+pillow
+openvino
+pyyaml
+numpy
+
+# PDF handling
+PyMuPDF
+pdf2image
+PyPDF2
+
+# Machine Learning
+ultralytics
+onnxruntime
+mediapipe==0.10.9
+
+# UI
+customtkinter
+
+# Utilities
+matplotlib
+tqdm
+rembg
