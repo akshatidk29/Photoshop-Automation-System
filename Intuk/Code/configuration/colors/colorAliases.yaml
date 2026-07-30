@@ -13,7 +13,21 @@
 aliases:
   # Complex multi-word color patterns (add full color → abbreviated form)
   midgreydarkheathermidgrey: [midgydhmgy]
-  
+
+  # Careismatic / scrubs - filenames abbreviate or misspell the colour name.
+  # Keyed by the FULL colour as written in the Excel, mapped to the forms that
+  # actually appear in filenames (e.g. MC2660_CLOD.jpg for "Cloud").
+  cloud: [clod]
+  galaxy: [glxy]
+  grape: [grap]
+  huntergreen: [hntr, hnter, hntergreen, hunter]
+  olive: [oliv]
+  pewter: [pwtr, pewte]
+  royal: [royl]
+  lilac: [lila]
+  shockingpink: [shockpink]
+  ciel: [ceil]
+
   # Basic Colors
   blk: [black]
   bk: [black]

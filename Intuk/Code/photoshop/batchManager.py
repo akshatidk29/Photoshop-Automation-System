@@ -86,7 +86,9 @@ class PhotoshopBatchManager:
         if isinstance(logoPathsList, str):
             logoPathsList = [logoPathsList]
         
-        if not coordinatesList or None in coordinatesList:
+        # An EMPTY list is valid - an undecorated row exports the image with no
+        # placement. A list that *contains* None still means a failed lookup.
+        if None in coordinatesList:
             logError(f"Skipping combo because some coordinates missing for {targetName}")
             return False
         

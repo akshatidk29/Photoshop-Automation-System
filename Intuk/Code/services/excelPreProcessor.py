@@ -16,7 +16,7 @@ import os
 import pandas as pd
 from typing import Dict, List, Any, Optional
 
-from services.excelReader import readExcel
+from services.excelReader import readExcel, ROW_INVALID, ROW_INVALID_REASON
 from locators.imageLocator import findImage, findImageCandidates
 from locators.logoLocator import findLogo, findMultipleLogos
 from core.utils import parseCustomSize
@@ -65,6 +65,8 @@ class EnrichedColumns:
     IS_CAP_DUAL_VIEW = "__AUTO_isCapDualView"
     CAP_FRONT_IMAGE_PATH = "__AUTO_capFrontImagePath"
     CAP_BACKSIDE_IMAGE_PATH = "__AUTO_capBackSideImagePath"
+    # Undecorated rows - image is processed and exported, logo placement skipped
+    IS_NO_LOGO = "__AUTO_isNoLogo"
     # Output
     OUTPUT_RESULT = "__AUTO_outputResult"
 
@@ -78,10 +80,17 @@ class PreProcessingStatus:
 
 # HELPER: Position & Garment Type Resolution
 
-def _resolvePositionsAndGarmentType(locationName: str, partId: str) -> Dict[str, Any]:
+def _resolvePositionsAndGarmentType(locationName: str, partId: str,
+                                    isNoLogo: bool = False,
+                                    fallbackGarmentType: str = 'T-SHIRT') -> Dict[str, Any]:
     """
     Parse positions and determine garment type, view requirements.
-    
+
+    Args:
+        isNoLogo: row carries no artwork. The position, if any, is then used only
+                  to pick the right product view - it never fails the row.
+        fallbackGarmentType: used when a no-logo row has no usable position.
+
     Returns dict with:
         positions: List[str]
         garmentType: str
@@ -98,15 +107,21 @@ def _resolvePositionsAndGarmentType(locationName: str, partId: str) -> Dict[str,
         'capViewType': 'back',
         'errors': []
     }
-    
+
     # Parse positions
     positions = parseComboPosition(locationName)
     result['positions'] = positions
-    
-    if not positions and locationName.strip():
-        result['errors'].append(f"Could not parse position '{locationName}'")
+
+    if not positions:
+        if isNoLogo:
+            # Undecorated row with no usable location: process the image only.
+            result['garmentType'] = fallbackGarmentType
+        elif locationName.strip():
+            result['errors'].append(f"Could not parse position '{locationName}'")
+        else:
+            result['errors'].append("No decoration location provided")
         return result
-    
+
     # Validate positions
     if CONFIG_AVAILABLE and validatePosition:
         for pos in positions:
@@ -131,7 +146,14 @@ def _resolvePositionsAndGarmentType(locationName: str, partId: str) -> Dict[str,
         # CAP: Check for CAP-BACK / CAP-SIDE positions
         if hasCapDualViewPosition and result['garmentType'] == 'CAP':
             result['isCapDualView'] = hasCapDualViewPosition(positions)
-    
+
+    if isNoLogo:
+        # An undecorated row is never failed over its position - the position
+        # only steers which product view gets picked.
+        result['errors'] = []
+        if result['garmentType'] in (None, '', 'UNKNOWN'):
+            result['garmentType'] = fallbackGarmentType
+
     return result
 
 
@@ -323,7 +345,13 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
     errors = []
     warnings = []
     validCount = 0
-    
+    noLogoCount = 0
+
+    # Only used to steer image view filtering for an undecorated row that has no
+    # usable position: T-SHIRT/CAP get strict front/back filtering, anything else
+    # accepts any view.
+    fallbackGarmentType = 'T-SHIRT' if defaultCanvasHeight == 1800 else 'BAG'
+
     for idx, row in enumerate(rows, 1):
         # Extract row data (using internal field names from excelReader)
         supplierName = row.get("supplierName", "")
@@ -345,9 +373,53 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
         
         errorMessages = []
         warningMessages = []
-        
+
+        # ===== STEP 0: Rows the reader could not validate =====
+        # Recorded as an error row rather than dropped, so the customer can see
+        # exactly which sheet rows need fixing.
+        if row.get(ROW_INVALID):
+            reason = row.get(ROW_INVALID_REASON) or "Invalid row"
+            enrichedRow[EnrichedColumns.STATUS] = PreProcessingStatus.ERROR
+            enrichedRow[EnrichedColumns.ERROR_MESSAGE] = reason
+            enrichedRow[EnrichedColumns.IS_NO_LOGO] = False
+            enrichedRow[EnrichedColumns.POSITION] = ""
+            enrichedRow[EnrichedColumns.POSITIONS_LIST] = []
+            enrichedRow[EnrichedColumns.GARMENT_TYPE] = "UNKNOWN"
+            enrichedRow[EnrichedColumns.IS_BACK_POSITION] = False
+            enrichedRow[EnrichedColumns.IS_CAP_DUAL_VIEW] = False
+            enrichedRow[EnrichedColumns.IMAGE_PATH] = ""
+            enrichedRow[EnrichedColumns.FRONT_IMAGE_PATH] = ""
+            enrichedRow[EnrichedColumns.BACK_IMAGE_PATH] = ""
+            enrichedRow[EnrichedColumns.CAP_FRONT_IMAGE_PATH] = ""
+            enrichedRow[EnrichedColumns.CAP_BACKSIDE_IMAGE_PATH] = ""
+            enrichedRow[EnrichedColumns.LOGO_PATH] = ""
+            enrichedRow[EnrichedColumns.LOGO_PATHS_LIST] = []
+            enrichedRow[EnrichedColumns.LOGO_SIZE] = []
+            enrichedRow[EnrichedColumns.LOGO_SIZES_LIST] = []
+            enrichedRow[EnrichedColumns.CANVAS_HEIGHT] = defaultCanvasHeight
+            errors.append({'row': idx, 'finalName': finalName, 'message': reason})
+            enrichedRows.append(enrichedRow)
+            continue
+
+        # An undecorated row is one we cannot place artwork for: either there is
+        # no decoration code, or there is no location telling us where it goes.
+        # Both mean "resize and export the product image, place nothing".
+        isNoLogo = (not decorationCodesList) or (not str(locationName).strip())
+        enrichedRow[EnrichedColumns.IS_NO_LOGO] = isNoLogo
+        if isNoLogo:
+            noLogoCount += 1
+            # A code with no location is ambiguous - surface it so the customer
+            # can tell a deliberately blank thumbnail from a missing location.
+            if decorationCodesList and not str(locationName).strip():
+                warningMessages.append(
+                    f"Decoration code '{decorationCodesList[0]}' present but no decoration "
+                    f"location - image exported without a logo"
+                )
+
         # ===== STEP 1: Resolve positions & garment type =====
-        positionInfo = _resolvePositionsAndGarmentType(locationName, partId)
+        positionInfo = _resolvePositionsAndGarmentType(
+            locationName, partId, isNoLogo=isNoLogo, fallbackGarmentType=fallbackGarmentType
+        )
         positions = positionInfo['positions']
         
         enrichedRow[EnrichedColumns.POSITION] = ",".join(positions)
@@ -372,17 +444,25 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
         warningMessages.extend(imageInfo['warnings'])
         
         # ===== STEP 3: Resolve logo paths =====
-        logoInfo = _resolveLogoPaths(logoRoot, decorationCodesList, positions)
-        
-        enrichedRow[EnrichedColumns.LOGO_PATH] = logoInfo['logoPath']
-        enrichedRow[EnrichedColumns.LOGO_PATHS_LIST] = logoInfo['logoPathsList']
-        
-        errorMessages.extend(logoInfo['errors'])
-        
+        if isNoLogo:
+            # Nothing to place - do not look for artwork and do not fail the row.
+            enrichedRow[EnrichedColumns.LOGO_PATH] = ''
+            enrichedRow[EnrichedColumns.LOGO_PATHS_LIST] = []
+        else:
+            logoInfo = _resolveLogoPaths(logoRoot, decorationCodesList, positions)
+
+            enrichedRow[EnrichedColumns.LOGO_PATH] = logoInfo['logoPath']
+            enrichedRow[EnrichedColumns.LOGO_PATHS_LIST] = logoInfo['logoPathsList']
+
+            errorMessages.extend(logoInfo['errors'])
+
         # ===== STEP 4: Resolve logo sizes =====
-        logoSizes, sizeFallback, sizeReason = _resolveLogoSizesForPositions(
-            positions, customLogoSize, useExcelLogoSize, logoSizesConfig
-        )
+        if isNoLogo:
+            logoSizes, sizeFallback, sizeReason = [], False, ""
+        else:
+            logoSizes, sizeFallback, sizeReason = _resolveLogoSizesForPositions(
+                positions, customLogoSize, useExcelLogoSize, logoSizesConfig
+            )
         enrichedRow[EnrichedColumns.LOGO_SIZE] = logoSizes[0] if len(logoSizes) == 1 else logoSizes
         enrichedRow[EnrichedColumns.LOGO_SIZES_LIST] = logoSizes
         
@@ -413,6 +493,7 @@ def preProcessExcel(excelPath: str, imageRoot: str, logoRoot: str,
     print(f"\n[PRE-PROCESS] Complete!")
     print(f"  Total:    {len(rows)}")
     print(f"  Valid:    {validCount}")
+    print(f"  No logo:  {noLogoCount} (image resized and exported, no logo placed)")
     print(f"  Errors:   {len(errors)}")
     print(f"  Warnings: {len(warnings)}")
     

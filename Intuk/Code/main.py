@@ -182,6 +182,10 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
         
         garmentType = row.get(EnrichedColumns.GARMENT_TYPE, "T-SHIRT")
         activeHeight = row.get(EnrichedColumns.CANVAS_HEIGHT, canvasHeight)
+
+        # Undecorated row (no code, or no location saying where the logo goes):
+        # resize and export the product image, place nothing.
+        isNoLogo = row.get(EnrichedColumns.IS_NO_LOGO, False)
         
         # Dual-view back position data (T-SHIRT)
         isBackPosition = row.get(EnrichedColumns.IS_BACK_POSITION, False)
@@ -217,33 +221,42 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
             failed += 1
             continue
         
-        # Validate logo paths (support both single and multi-logo)
-        if not logoPathsList:
-            errorMsg = "No logo paths resolved"
-            rLog.error(errorMsg)
-            batchLogger.logError(idx, finalName, errorMsg)
-            row[EnrichedColumns.OUTPUT_RESULT] = errorMsg  # Track in Excel
-            if gui:
-                gui.errorTracker.addError(idx, finalName, errorMsg)
-            failed += 1
-            continue
-        
-        # Filter out None values and validate that at least one valid logo exists
-        validLogos = [lp for lp in logoPathsList if lp and os.path.exists(lp)]
-        
-        if not validLogos:
-            errorMsg = "No valid logo files found on disk"
-            rLog.error(errorMsg)
-            batchLogger.logError(idx, finalName, errorMsg)
-            row[EnrichedColumns.OUTPUT_RESULT] = errorMsg  # Track in Excel
-            if gui:
-                gui.errorTracker.addError(idx, finalName, errorMsg)
-            failed += 1
-            continue
-        
-        if not positions:
-            positions = [locationName.upper().replace(" ", "-")]
-        
+        validLogos = []
+
+        if isNoLogo:
+            # Clear everything the placement path would otherwise consume.
+            rLog.log("No artwork for this row - exporting image without a logo")
+            positions = []
+            logoPathsList = []
+            logoSizes = []
+        else:
+            # Validate logo paths (support both single and multi-logo)
+            if not logoPathsList:
+                errorMsg = "No logo paths resolved"
+                rLog.error(errorMsg)
+                batchLogger.logError(idx, finalName, errorMsg)
+                row[EnrichedColumns.OUTPUT_RESULT] = errorMsg  # Track in Excel
+                if gui:
+                    gui.errorTracker.addError(idx, finalName, errorMsg)
+                failed += 1
+                continue
+
+            # Filter out None values and validate that at least one valid logo exists
+            validLogos = [lp for lp in logoPathsList if lp and os.path.exists(lp)]
+
+            if not validLogos:
+                errorMsg = "No valid logo files found on disk"
+                rLog.error(errorMsg)
+                batchLogger.logError(idx, finalName, errorMsg)
+                row[EnrichedColumns.OUTPUT_RESULT] = errorMsg  # Track in Excel
+                if gui:
+                    gui.errorTracker.addError(idx, finalName, errorMsg)
+                failed += 1
+                continue
+
+            if not positions:
+                positions = [locationName.upper().replace(" ", "-")]
+
         # NOTE: Do NOT sort positions - this breaks alignment with logoSizes list
         isCombo = len(positions) > 1
         
@@ -259,7 +272,10 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
         
         try:
             # Check if this is a CAP dual-view (CAP-BACK or CAP-SIDE)
-            if isCapDualView and capFrontImagePath and capBackSideImagePath and \
+            # Dual-view exists to show a logo sitting on an otherwise hidden face.
+            # With no logo there is nothing to reveal, so undecorated rows stay
+            # single-view.
+            if not isNoLogo and isCapDualView and capFrontImagePath and capBackSideImagePath and \
                os.path.exists(capFrontImagePath) and os.path.exists(capBackSideImagePath):
                 rLog.log(f"Processing CAP DUAL-VIEW...")
                 
@@ -292,7 +308,7 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                 capDualViewLayout = imgProcessor.getLastCapDualViewLayout()
                 rLog.log("CAP dual-view image processing successful")
             # Check if this is a back position that should use dual-view (T-SHIRT/BLANKET)
-            elif isBackPosition and garmentType in ("T-SHIRT", "BLANKET"):
+            elif not isNoLogo and isBackPosition and garmentType in ("T-SHIRT", "BLANKET"):
                 # Explicit check for front image existence
                 if not frontImagePath or not os.path.exists(frontImagePath):
                     errorMsg = f"Dual-view required for back position but front image not found: {frontImagePath}"
@@ -412,8 +428,11 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                     rLog.error(f"Position '{pos}' detection error: {e}")
                     batchLogger.logError(idx, finalName, f"Position '{pos}' detection error: {e}")
             
-            # Check results: ALL failed vs SOME failed vs ALL succeeded
-            if len(detectedData) == 0:
+            # Check results: ALL failed vs SOME failed vs ALL succeeded.
+            # An undecorated row has no positions to detect, so an empty result
+            # is expected rather than a failure - it falls through with empty
+            # placement lists and is exported image-only.
+            if not isNoLogo and len(detectedData) == 0:
                 # ALL positions failed - skip entire row
                 errorMsg = f"NO positions detected by model. Failed: {', '.join(failedPositions)}"
                 rLog.error(errorMsg)
@@ -498,28 +517,20 @@ def runAutomation(excelPath, imageRoot, logoRoot, canvasHeight, gui, settings):
                     # Should not happen due to earlier validation, but safety check
                     logoPathsList.append(None)
             
-            if isCombo:
-                # Pass per-position sizes and paths for combo
-                ok = batchMgr.addCombo(
-                    partId, finalImagePath, logoPathsList, os.path.basename(imagePath),
-                    decorationCode, positions, coordinatesList, rotationsList,
-                    garmentType, logoSizes, finalName, activeHeight,
-                    clippingEnabled=currentSettings['clippingEnabled'], clippingPositions=currentSettings['clippingPositions']
-                )
-            else:
-                # Single position - still use addCombo for consistency (it handles single positions too)
-                ok = batchMgr.addCombo(
-                    partId, finalImagePath, logoPathsList, os.path.basename(imagePath),
-                    decorationCode, positions, coordinatesList, rotationsList,
-                    garmentType, logoSizes, finalName, activeHeight,
-                    clippingEnabled=currentSettings['clippingEnabled'], clippingPositions=currentSettings['clippingPositions']
-                )
+            # addCombo handles combo, single and undecorated (empty lists) alike
+            ok = batchMgr.addCombo(
+                partId, finalImagePath, logoPathsList, os.path.basename(imagePath),
+                decorationCode, positions, coordinatesList, rotationsList,
+                garmentType, logoSizes, finalName, activeHeight,
+                clippingEnabled=currentSettings['clippingEnabled'], clippingPositions=currentSettings['clippingPositions']
+            )
             
             if ok:
                 processed += 1
                 rLog.success("Added to batch")
                 batchLogger.logSuccess(idx, finalName, "Added to batch successfully")
-                row[EnrichedColumns.OUTPUT_RESULT] = "SUCCESS"  # Track in Excel
+                # Track in Excel
+                row[EnrichedColumns.OUTPUT_RESULT] = "SUCCESS (no logo)" if isNoLogo else "SUCCESS"
 
                 success = True
         
