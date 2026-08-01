@@ -38,6 +38,17 @@ class ImageProcessor:
         # Create reusable rembg session (avoids re-initializing model per call)
         # Use OpenVINO provider if available for faster CPU inference
         self._rembgSession = self._createRembgSession()
+
+        # Secondary human-segmentation session. u2net cannot separate a white or
+        # very light garment from a white studio background, so it deletes the
+        # garment and leaves severed arms/hands. u2net_human_seg segments the
+        # person correctly. The two masks are combined (union) so this can only
+        # ever ADD back what u2net dropped - it never removes anything extra,
+        # which keeps non-person shots (bags, towels) exactly as they were.
+        # Created lazily on first use so the extra model is only fetched if the
+        # batch actually needs it.
+        self._humanSession = None
+        self._humanSessionTried = False
     
     def cleanup(self):
         """Remove temp directory and recreate empty."""
@@ -75,6 +86,28 @@ class ImageProcessor:
             print("[ImageProcessor] rembg session creation failed, will use default per-call")
             return None
 
+    def _getHumanSession(self):
+        """
+        Lazily create the u2net_human_seg session.
+
+        Returns None (permanently, after one attempt) if the model is not
+        available - e.g. no internet on first run to fetch it. In that case
+        background removal simply behaves exactly as it did before.
+        """
+        if self._humanSessionTried:
+            return self._humanSession
+
+        self._humanSessionTried = True
+        try:
+            self._humanSession = new_session("u2net_human_seg")
+            print("[ImageProcessor] human-segmentation model loaded (light garments preserved)")
+        except Exception as e:
+            self._humanSession = None
+            print(f"[WARNING] u2net_human_seg unavailable ({e}).")
+            print("[WARNING] Falling back to u2net only - light/white garments on a white")
+            print("[WARNING] background may be cut. Place u2net_human_seg.onnx in %USERPROFILE%\\.u2net to fix.")
+        return self._humanSession
+
     def _extractForeground(self, imageArray: np.ndarray) -> Image.Image:
         """Extract foreground with transparent background using rembg."""
         bgSettings = getBackgroundRemovalSettings()
@@ -88,6 +121,40 @@ class ImageProcessor:
         if self._rembgSession is not None:
             kwargs['session'] = self._rembgSession
         removedBg = remove(pilImage, **kwargs)
+
+        # Union in the human-segmentation mask. Keeps removedBg's RGB untouched
+        # so decorated garments come out exactly as before; only the alpha can
+        # gain pixels u2net wrongly discarded.
+        humanSession = self._getHumanSession()
+        if humanSession is not None:
+            try:
+                humanKwargs = dict(kwargs)
+                humanKwargs['session'] = humanSession
+                humanBg = remove(pilImage, **humanKwargs)
+
+                base = np.array(removedBg)
+                human = np.array(humanBg)
+                original = np.array(pilImage)
+
+                if (base.shape[:2] == human.shape[:2] == original.shape[:2]
+                        and base.shape[2] == 4 and human.shape[2] == 4):
+                    baseAlpha, humanAlpha = base[:, :, 3], human[:, :, 3]
+                    # Where u2net said "background", alpha matting has already
+                    # overwritten the RGB with an estimated (colour-bled) value.
+                    # Those pixels are invisible while alpha is 0, but become
+                    # visible the moment the union makes them opaque - so restore
+                    # the true source colour there. Pixels u2net already kept are
+                    # left exactly as they are, so decorated garments are byte-for
+                    # -byte unchanged.
+                    added = humanAlpha > baseAlpha
+                    if added.any():
+                        base[:, :, :3][added] = original[added]
+                    base[:, :, 3] = np.maximum(baseAlpha, humanAlpha)
+                    removedBg = Image.fromarray(base)
+            except Exception as e:
+                # Never let the secondary pass break a batch - u2net's result stands.
+                print(f"[WARNING] human-segmentation pass failed, using u2net only: {e}")
+
         return removedBg
 
     def _detectObjectBounds(self, alphaChannel: np.ndarray) -> Tuple[int, int, int, int]:
